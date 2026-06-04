@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+
+{% block title %}СППР - Автоматический анализ качества{% endblock %}
+
+{% block content %}
+<div class="spzr-dashboard">
+    <h1 class="page-title">СИСТЕМА ПОДДЕРЖКИ ПРИНЯТИЯ РЕШЕНИЙ</h1>
+    <p class="subtitle" style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.8rem;">
+        ПОРОГОВЫЙ МЕТОД ДИАГНОСТИКИ КАЧЕСТВА ПИВНОЙ ПРОДУКЦИИ
+    </p>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem;">
+            <h4 style="color: var(--text-primary); margin-bottom: 0.75rem; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 2px;">ДИАГНОСТИЧЕСКАЯ ФОРМУЛА</h4>
+            <div style="background: var(--bg-secondary); padding: 1rem; font-family: monospace; font-size: 1rem; text-align: center; border-radius: var(--radius-sm); color: var(--text-primary);">
+                P = e<sup>-ln(2) / (Co/Ch)²</sup>
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1rem; font-size: 0.6rem; flex-wrap: wrap;">
+                <div><span style="color: var(--text-muted);">Ch = N</span> — СИГНАЛ НОРМЫ</div>
+                <div><span style="color: var(--text-muted);">Co = Σ log₂(n)</span> — СИГНАЛ ОТКЛОНЕНИЯ</div>
+                <div><span style="color: var(--text-muted);">Go = Co/Ch</span> — ОТНОШЕНИЕ</div>
+            </div>
+        </div>
+        
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem;">
+            <h4 style="color: var(--text-primary); margin-bottom: 0.75rem; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 2px;">ПОРОГОВОЕ ПРАВИЛО</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
+                <div style="text-align: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-sm);">
+                    <div style="font-weight: 700; font-size: 1rem; color: var(--text-primary);">P ≤ 0.5</div>
+                    <div style="background: var(--success); color: var(--bg-primary); padding: 0.25rem; margin-top: 0.5rem; font-size: 0.7rem; border-radius: var(--radius-sm);">КАЧЕСТВЕННЫЙ</div>
+                </div>
+                <div style="text-align: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: var(--radius-sm);">
+                    <div style="font-weight: 700; font-size: 1rem; color: var(--text-primary);">P > 0.5</div>
+                    <div style="background: var(--danger); color: var(--bg-primary); padding: 0.25rem; margin-top: 0.5rem; font-size: 0.7rem; border-radius: var(--radius-sm);">БРАК</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 2rem;">
+        <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; justify-content: space-between;">
+            <div style="flex: 2; min-width: 250px;">
+                <h4 style="color: var(--text-primary); margin-bottom: 1rem; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 2px;">НАСТРОЙКА ЧУВСТВИТЕЛЬНОСТИ</h4>
+                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <div style="flex: 3;">
+                        <input type="range" id="deltaXSlider" min="0.1" max="5.0" step="0.1" value="1.0" style="width: 100%;">
+                    </div>
+                    <div style="flex: 1; min-width: 100px;">
+                        <input type="number" id="deltaXValue" value="1.0" step="0.1" min="0.1" max="5.0" class="form-control">
+                    </div>
+                    <button onclick="applyDeltaX()" class="btn btn-primary">ПРИМЕНИТЬ</button>
+                </div>
+                <p style="margin-top: 0.5rem; font-size: 0.6rem; color: var(--text-muted);">
+                    Δx = <strong id="currentDeltaX" style="color: var(--accent-color);">1.0</strong> — МЕНЬШЕЕ ЗНАЧЕНИЕ = ВЫШЕ ЧУВСТВИТЕЛЬНОСТЬ
+                </p>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button onclick="exportSPZR('json')" class="btn btn-sm" style="background: var(--accent-color); color: var(--bg-primary);">JSON</button>
+                <button onclick="exportSPZR('excel')" class="btn btn-sm btn-success">EXCEL</button>
+            </div>
+        </div>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;">
+        <div class="stat-card" style="text-align: center; padding: 1rem;">
+            <div style="font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted);">ВСЕГО ПОЗИЦИЙ</div>
+            <div id="totalCount" class="stat-number" style="font-size: 1.8rem; color: var(--text-primary);">0</div>
+        </div>
+        <div class="stat-card" style="text-align: center; padding: 1rem;">
+            <div style="font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted);">КАЧЕСТВЕННЫЕ</div>
+            <div id="qualityCount" class="stat-number" style="font-size: 1.8rem; color: var(--success);">0</div>
+        </div>
+        <div class="stat-card" style="text-align: center; padding: 1rem;">
+            <div style="font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted);">БРАК</div>
+            <div id="defectCount" class="stat-number" style="font-size: 1.8rem; color: var(--danger);">0</div>
+        </div>
+        <div class="stat-card" style="text-align: center; padding: 1rem;">
+            <div style="font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted);">БРАК, %</div>
+            <div id="defectPercent" class="stat-number" style="font-size: 1.8rem; color: var(--text-primary);">0%</div>
+        </div>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem;">
+            <h4 style="color: var(--text-primary); margin-bottom: 1rem; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 2px;">ЗНАЧИМОСТЬ ХАРАКТЕРИСТИК (ВЕСА)</h4>
+            <div style="height: 280px; position: relative;">
+                <canvas id="weightPieChart"></canvas>
+            </div>
+        </div>
+        
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem;">
+            <h4 style="color: var(--text-primary); margin-bottom: 1rem; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 2px;">ГРАДАЦИИ ПРИ Δx = <span id="currentDeltaXChart" style="color: var(--accent-color);">1.0</span></h4>
+            <div style="height: 280px; position: relative;">
+                <canvas id="gradationsBarChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 2rem;">
+        <h4 style="color: var(--text-primary); margin-bottom: 1rem; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 2px;">СРАВНЕНИЕ ЧУВСТВИТЕЛЬНОСТИ</h4>
+        <div style="height: 350px; position: relative;">
+            <canvas id="comparisonBarChart"></canvas>
+        </div>
+        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem;">
+            <button onclick="loadComparisonData()" class="btn btn-sm" style="background: var(--accent-color); color: var(--bg-primary);">ОБНОВИТЬ СРАВНЕНИЕ</button>
+        </div>
+    </div>
+    
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+            <h4 style="color: var(--text-primary); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 2px;">СРЕДНИЕ ГРАДАЦИИ ПО ХАРАКТЕРИСТИКАМ</h4>
+            <span style="background: var(--bg-secondary); padding: 0.25rem 0.75rem; font-size: 0.6rem; border-radius: var(--radius-sm); color: var(--text-secondary);">Δx = <span id="statsDeltaX" style="color: var(--accent-color);">1.0</span></span>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="data-table" style="width: 100%; font-size: 0.7rem;">
+                <thead>
+                    <tr>
+                        <th>ХАРАКТЕРИСТИКА</th>
+                        <th style="text-align: center;">СРЕДНИЕ ГРАДАЦИИ (N̄)</th>
+                        <th style="text-align: center;">СРЕДНИЙ LOG₂(N)</th>
+                        <th style="text-align: center;">ВКЛАД В CO</th>
+                    </tr>
+                </thead>
+                <tbody id="characteristicStatsTable">
+                    <tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-muted);">ЗАГРУЗКА...</div></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; justify-content: space-between; align-items: center;">
+        <div style="display: flex; gap: 0.5rem;">
+            <button onclick="loadAnalysis()" class="btn btn-primary">ОБНОВИТЬ АНАЛИЗ</button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <select id="sortSelect" class="form-control" style="width: 180px; font-size: 0.6rem;" onchange="sortResults()">
+                <option value="supplier">ПОСТАВЩИК + ПРОДУКТ</option>
+                <option value="product">ПРОДУКТ (А-Я)</option>
+                <option value="quality_first">КАЧЕСТВЕННЫЕ ПЕРВЫЕ</option>
+                <option value="defect_first">БРАК ПЕРВЫЕ</option>
+                <option value="p_asc">P (ПО ВОЗРАСТАНИЮ)</option>
+                <option value="p_desc">P (ПО УБЫВАНИЮ)</option>
+                <option value="go_asc">GO (ПО ВОЗРАСТАНИЮ)</option>
+                <option value="go_desc">GO (ПО УБЫВАНИЮ)</option>
+            </select>
+            <select id="filterSelect" class="form-control" style="width: 130px; font-size: 0.6rem;" onchange="filterResults()">
+                <option value="all">ВСЕ ПОЗИЦИИ</option>
+                <option value="quality">ТОЛЬКО КАЧЕСТВЕННЫЕ</option>
+                <option value="defect">ТОЛЬКО БРАК</option>
+            </select>
+            <input type="text" id="searchInput" class="form-control" placeholder="ПОИСК..." style="width: 180px; font-size: 0.6rem;" onkeyup="filterResults()">
+        </div>
+    </div>
+    
+    <div id="loadingIndicator" style="display: none; text-align: center; padding: 2rem;">
+        <div class="loading">АНАЛИЗ ДАННЫХ...</div>
+    </div>
+    
+    <div id="resultsContainer" style="display: none;">
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem;">
+            <h4 style="color: var(--text-primary); margin-bottom: 1rem; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 2px;">РЕЗУЛЬТАТЫ ДИАГНОСТИКИ</h4>
+            <div style="overflow-x: auto;">
+                <table class="data-table" style="width: 100%; font-size: 0.7rem;">
+                    <thead>
+                        <tr>
+                            <th>ПОСТАВЩИК</th>
+                            <th>ПРОДУКЦИЯ</th>
+                            <th>N</th>
+                            <th title="Σ log₂(n)">CO</th>
+                            <th title="Co/Ch">GO</th>
+                            <th title="e^(-ln2/Go²)">P</th>
+                            <th>ВЕРДИКТ</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 1rem; font-size: 0.6rem; color: var(--text-muted); text-align: center;">
+                CH = N | CO = Σ LOG₂(Nᵢ) | GO = CO/CH | P = E^(-LN2/GO²)
+            </div>
+        </div>
+    </div>
+    
+    <div id="detailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 2rem; max-width: 900px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="color: var(--text-primary); font-size: 0.9rem;">ДЕТАЛЬНЫЙ АНАЛИЗ</h3>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button onclick="exportCurrentProduct('json')" class="btn btn-sm" style="background: var(--accent-color); color: var(--bg-primary);">JSON</button>
+                    <button onclick="exportCurrentProduct('excel')" class="btn btn-sm btn-success">EXCEL</button>
+                    <button onclick="closeModal()" class="modal-close">X</button>
+                </div>
+            </div>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+let allResults = [];
+let currentDelta = 1.0;
+let weightChart = null;
+let gradationsChart = null;
+let comparisonChart = null;
+let currentProductId = null;
+let currentSupplierId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadWeightChart();
+    loadAnalysis();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    document.getElementById('deltaXSlider').addEventListener('input', updateDeltaX);
+    document.getElementById('deltaXValue').addEventListener('change', updateDeltaXFromInput);
+}
+
+function updateDeltaX() {
+    const val = parseFloat(document.getElementById('deltaXSlider').value).toFixed(1);
+    document.getElementById('deltaXValue').value = val;
+    document.getElementById('currentDeltaX').textContent = val;
+    document.getElementById('currentDeltaXChart').textContent = val;
+}
+
+function updateDeltaXFromInput() {
+    let val = parseFloat(document.getElementById('deltaXValue').value);
+    if (isNaN(val) || val < 0.1) val = 0.1;
+    if (val > 5.0) val = 5.0;
+    val = val.toFixed(1);
+    document.getElementById('deltaXValue').value = val;
+    document.getElementById('deltaXSlider').value = val;
+    document.getElementById('currentDeltaX').textContent = val;
+    document.getElementById('currentDeltaXChart').textContent = val;
+}
+
+async function applyDeltaX() {
+    currentDelta = parseFloat(document.getElementById('deltaXValue').value);
+    await loadAnalysis();
+    await loadComparisonData();
+    document.getElementById('statsDeltaX').textContent = currentDelta;
+}
+
+async function loadAnalysis() {
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('resultsContainer').style.display = 'none';
+    
+    try {
+        const response = await fetch(`/api/spzr/analyze-all?delta_x=${currentDelta}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            allResults = data.results;
+            
+            document.getElementById('totalCount').textContent = data.total;
+            document.getElementById('qualityCount').textContent = data.quality;
+            document.getElementById('defectCount').textContent = data.defect;
+            const percent = data.total > 0 ? Math.round(data.defect / data.total * 100) : 0;
+            document.getElementById('defectPercent').textContent = percent + '%';
+            
+            sortResults();
+            document.getElementById('resultsContainer').style.display = 'block';
+            
+            if (data.characteristic_stats) {
+                updateGradationsChart(data.characteristic_stats);
+                renderCharacteristicStats(data.characteristic_stats);
+                document.getElementById('statsDeltaX').textContent = currentDelta;
+            }
+        } else {
+            alert('ОШИБКА: ' + data.error);
+        }
+    } catch (e) {
+        alert('ОШИБКА: ' + e.message);
+    } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+function renderCharacteristicStats(stats) {
+    const tbody = document.getElementById('characteristicStatsTable');
+    if (!stats || stats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">НЕТ ДАННЫХ</div></tr>';
+        return;
+    }
+    
+    let totalSumLog2 = 0;
+    stats.forEach(stat => { totalSumLog2 += Math.log2(stat.avg_gradations); });
+    
+    let html = '';
+    stats.forEach(stat => {
+        const avgLog2 = Math.log2(stat.avg_gradations);
+        const percent = (avgLog2 / totalSumLog2 * 100).toFixed(1);
+        html += `<tr>
+            <td><strong style="color: var(--text-primary);">${stat.name}</strong></div>
+            <td style="text-align: center; color: var(--text-primary);">${stat.avg_gradations}</div>
+            <td style="text-align: center; color: var(--text-primary);">${avgLog2.toFixed(3)}</div>
+            <td style="text-align: center; color: var(--text-primary);">${percent}%</div>
+        </tr>`;
+    });
+    tbody.innerHTML = html;
+}
+
+function sortResults() {
+    const sortBy = document.getElementById('sortSelect').value;
+    let sorted = [...allResults];
+    
+    switch(sortBy) {
+        case 'supplier':
+            sorted.sort((a, b) => {
+                if (a.supplier_name === b.supplier_name) return a.product_name.localeCompare(b.product_name);
+                return a.supplier_name.localeCompare(b.supplier_name);
+            });
+            break;
+        case 'product':
+            sorted.sort((a, b) => a.product_name.localeCompare(b.product_name));
+            break;
+        case 'quality_first':
+            sorted.sort((a, b) => a.metrics.is_quality === b.metrics.is_quality ? a.metrics.P - b.metrics.P : (a.metrics.is_quality ? -1 : 1));
+            break;
+        case 'defect_first':
+            sorted.sort((a, b) => a.metrics.is_quality === b.metrics.is_quality ? b.metrics.P - a.metrics.P : (a.metrics.is_quality ? 1 : -1));
+            break;
+        case 'p_asc':
+            sorted.sort((a, b) => a.metrics.P - b.metrics.P);
+            break;
+        case 'p_desc':
+            sorted.sort((a, b) => b.metrics.P - a.metrics.P);
+            break;
+        case 'go_asc':
+            sorted.sort((a, b) => a.metrics.Go - b.metrics.Go);
+            break;
+        case 'go_desc':
+            sorted.sort((a, b) => b.metrics.Go - a.metrics.Go);
+            break;
+        case 'co_asc':
+            sorted.sort((a, b) => a.metrics.Co - b.metrics.Co);
+            break;
+        case 'co_desc':
+            sorted.sort((a, b) => b.metrics.Co - a.metrics.Co);
+            break;
+        default:
+            sorted.sort((a, b) => a.metrics.P - b.metrics.P);
+    }
+    renderTable(sorted);
+}
+
+function renderTable(results) {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    if (!results || results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">НЕТ ДАННЫХ</td></tr>';
+        return;
+    }
+    
+    results.forEach(item => {
+        const m = item.metrics;
+        const isQuality = m.is_quality;
+        const row = document.createElement('tr');
+        row.style.borderLeft = `3px solid ${isQuality ? 'var(--success)' : 'var(--danger)'}`;
+        row.innerHTML = `
+            <td><strong style="color: var(--text-primary);">${item.supplier_name}</strong></td>
+            <td style="color: var(--text-secondary);">${item.product_name}</td>
+            <td style="color: var(--text-primary);">${m.Ch}</td>
+            <td style="color: var(--text-primary);">${m.Co.toFixed(3)}</td>
+            <td style="color: var(--text-primary);">${m.Go.toFixed(3)}</td>
+            <td style="color: var(--text-primary);">${m.P.toFixed(4)}</td>
+            <td><span style="display: inline-block; padding: 0.2rem 0.6rem; background: ${isQuality ? 'var(--success)' : 'var(--danger)'}; color: var(--bg-primary); font-size: 0.6rem; border-radius: var(--radius-sm);">${isQuality ? 'КАЧЕСТВЕННЫЙ' : 'БРАК'}</span></td>
+            <td><button onclick="showDetails(${item.product_id}, ${item.supplier_id})" class="btn btn-sm" style="background: var(--accent-color); color: var(--bg-primary);">ДЕТАЛИ</button></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function filterResults() {
+    const filter = document.getElementById('filterSelect').value;
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    let filtered = allResults;
+    
+    if (filter === 'quality') filtered = filtered.filter(r => r.metrics.is_quality);
+    else if (filter === 'defect') filtered = filtered.filter(r => !r.metrics.is_quality);
+    
+    if (search) filtered = filtered.filter(r => r.supplier_name.toLowerCase().includes(search) || r.product_name.toLowerCase().includes(search));
+    
+    const sortBy = document.getElementById('sortSelect').value;
+    switch(sortBy) {
+        case 'supplier': filtered.sort((a,b) => a.supplier_name.localeCompare(b.supplier_name)); break;
+        case 'product': filtered.sort((a,b) => a.product_name.localeCompare(b.product_name)); break;
+        case 'quality_first': filtered.sort((a,b) => a.metrics.is_quality === b.metrics.is_quality ? a.metrics.P - b.metrics.P : (a.metrics.is_quality ? -1 : 1)); break;
+        case 'defect_first': filtered.sort((a,b) => a.metrics.is_quality === b.metrics.is_quality ? b.metrics.P - a.metrics.P : (a.metrics.is_quality ? 1 : -1)); break;
+        case 'p_asc': filtered.sort((a,b) => a.metrics.P - b.metrics.P); break;
+        case 'p_desc': filtered.sort((a,b) => b.metrics.P - a.metrics.P); break;
+        case 'go_asc': filtered.sort((a,b) => a.metrics.Go - b.metrics.Go); break;
+        case 'go_desc': filtered.sort((a,b) => b.metrics.Go - a.metrics.Go); break;
+        case 'co_asc': filtered.sort((a,b) => a.metrics.Co - b.metrics.Co); break;
+        case 'co_desc': filtered.sort((a,b) => b.metrics.Co - a.metrics.Co); break;
+    }
+    renderTable(filtered);
+}
+
+async function loadWeightChart() {
+    try {
+        const response = await fetch('/api/spzr/characteristic-weights');
+        const data = await response.json();
+        if (data.success && data.characteristics) {
+            const ctx = document.getElementById('weightPieChart').getContext('2d');
+            if (weightChart) weightChart.destroy();
+            weightChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: data.characteristics.map(c => c.name),
+                    datasets: [{ 
+                        data: data.characteristics.map(c => c.weight), 
+                        backgroundColor: ['#d4b060', '#c4a050', '#b49040', '#a48030', '#947020', '#846010', '#745000', '#644000'], 
+                        borderWidth: 0 
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { 
+                                font: { size: 10, weight: 'normal' }, 
+                                color: '#e8d5c0',
+                                usePointStyle: true
+                            } 
+                        },
+                        tooltip: { 
+                            bodyColor: '#e8d5c0', 
+                            titleColor: '#f5e6d3',
+                            backgroundColor: '#2a1e18',
+                            borderColor: '#4a3828',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            });
+        }
+    } catch(e) { console.error(e); }
+}
+
+function updateGradationsChart(stats) {
+    if (!stats || stats.length === 0) return;
+    const ctx = document.getElementById('gradationsBarChart').getContext('2d');
+    if (gradationsChart) gradationsChart.destroy();
+    gradationsChart = new Chart(ctx, {
+        type: 'bar',
+        data: { 
+            labels: stats.map(s => s.name), 
+            datasets: [{ 
+                label: `ГРАДАЦИИ N ПРИ Δx = ${currentDelta}`, 
+                data: stats.map(s => s.avg_gradations), 
+                backgroundColor: '#d4b060', 
+                borderRadius: 4 
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            scales: { 
+                y: { 
+                    beginAtZero: true, 
+                    title: { 
+                        display: true, 
+                        text: 'n', 
+                        color: '#e8d5c0',
+                        font: { weight: 'normal', size: 11 }
+                    },
+                    ticks: { 
+                        color: '#c4a882',
+                        font: { size: 9 }
+                    },
+                    grid: { color: '#3a2a20' }
+                }, 
+                x: { 
+                    ticks: { 
+                        font: { size: 9 }, 
+                        color: '#c4a882'
+                    },
+                    grid: { display: false }
+                } 
+            }, 
+            plugins: { 
+                legend: { 
+                    display: false 
+                },
+                tooltip: { 
+                    bodyColor: '#e8d5c0', 
+                    titleColor: '#f5e6d3',
+                    backgroundColor: '#2a1e18',
+                    borderColor: '#4a3828',
+                    borderWidth: 1
+                }
+            } 
+        }
+    });
+}
+
+async function loadComparisonData() {
+    try {
+        const deltas = [0.2, 0.5, 1.0, 2.0, 5.0];
+        const promises = deltas.map(d => fetch(`/api/spzr/characteristic-stats?delta_x=${d}`).then(r => r.json()));
+        const results = await Promise.all(promises);
+        if (!results[0] || !results[0].success) return;
+        const ctx = document.getElementById('comparisonBarChart').getContext('2d');
+        if (comparisonChart) comparisonChart.destroy();
+        comparisonChart = new Chart(ctx, {
+            type: 'bar',
+            data: { 
+                labels: results[0].stats.map(s => s.name), 
+                datasets: deltas.map((d, i) => ({ 
+                    label: `Δx = ${d}`, 
+                    data: results[i].stats.map(s => s.avg_gradations), 
+                    backgroundColor: `rgba(212,176,96,${0.9 - i * 0.15})`, 
+                    borderRadius: 4 
+                })) 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    y: { 
+                        beginAtZero: true, 
+                        title: { 
+                            display: true, 
+                            text: 'ГРАДАЦИИ N', 
+                            color: '#e8d5c0',
+                            font: { weight: 'normal', size: 11 }
+                        },
+                        ticks: { 
+                            color: '#c4a882',
+                            font: { size: 9 }
+                        },
+                        grid: { color: '#3a2a20' }
+                    },
+                    x: { 
+                        ticks: { 
+                            color: '#c4a882',
+                            font: { size: 9 }
+                        },
+                        grid: { display: false }
+                    } 
+                }, 
+                plugins: { 
+                    tooltip: { 
+                        mode: 'index', 
+                        intersect: false, 
+                        bodyColor: '#e8d5c0', 
+                        titleColor: '#f5e6d3',
+                        backgroundColor: '#2a1e18',
+                        borderColor: '#4a3828',
+                        borderWidth: 1
+                    },
+                    legend: { 
+                        labels: { 
+                            color: '#e8d5c0',
+                            font: { size: 10 }
+                        },
+                        position: 'top'
+                    } 
+                } 
+            }
+        });
+    } catch(e) { console.error(e); }
+}
+
+async function showDetails(productId, supplierId) {
+    currentProductId = productId;
+    currentSupplierId = supplierId;
+    try {
+        const response = await fetch(`/api/spzr/product-detail?product_id=${productId}&supplier_id=${supplierId}&delta_x=${currentDelta}`);
+        const data = await response.json();
+        if (data.success) displayModal(data);
+        else alert('ОШИБКА: ' + data.error);
+    } catch(e) { alert('ОШИБКА: ' + e.message); }
+}
+
+function displayModal(data) {
+    const product = data.product;
+    const chars = data.characteristics;
+    const metrics = data.metrics;
+    const isQuality = metrics.is_quality;
+    const deviations = chars.filter(c => !c.in_norm).length;
+    const totalChars = chars.length;
+    
+    let charsHtml = '';
+    chars.forEach(c => {
+        charsHtml += `<tr ${!c.in_norm ? 'style="background: rgba(212,176,96,0.15);"' : ''}>
+            <td><strong style="color: var(--text-primary);">${c.name}</strong></td>
+            <td style="color: var(--text-secondary);">${c.unit || '-'}</td>
+            <td style="color: var(--text-secondary);">${c.min} — ${c.max}</td>
+            <td style="${!c.in_norm ? 'color: var(--danger); font-weight: bold;' : 'color: var(--text-primary);'}">${c.real}</td>
+            <td style="color: var(--text-primary);">${c.gradations}</td>
+            <td style="color: var(--text-primary);">${c.log2}</td>
+            <td style="color: var(--text-primary);">${c.weight}</td>
+            <td style="color: ${c.in_norm ? 'var(--success)' : 'var(--danger)'};">${c.in_norm ? 'В НОРМЕ' : 'ОТКЛОНЕНИЕ'}</td>
+        </tr>`;
+    });
+    
+    const explanation = isQuality ? `
+        <div style="background: rgba(106,154,74,0.15); padding: 1rem; margin-bottom: 1rem; border-left: 3px solid var(--success); border-radius: var(--radius-sm);">
+            <strong style="color: var(--text-primary);">ПОЧЕМУ ТОВАР КАЧЕСТВЕННЫЙ?</strong><br>
+            <span style="color: var(--text-secondary);">НЕСМОТРЯ НА ${deviations} ОТКЛОНЕНИЙ ИЗ ${totalChars}, P = ${metrics.base_P.toFixed(4)} ≤ 0.5.<br>
+            ОТКЛОНЕНИЯ НЕЗНАЧИТЕЛЬНЫ, СИГНАЛ ОТКЛОНЕНИЯ CO = ${metrics.Co} НЕ ПРЕВЫШАЕТ ПОРОГ.</span>
+        </div>` : `
+        <div style="background: rgba(186,90,58,0.15); padding: 1rem; margin-bottom: 1rem; border-left: 3px solid var(--danger); border-radius: var(--radius-sm);">
+            <strong style="color: var(--text-primary);">ПОЧЕМУ ТОВАР БРАК?</strong><br>
+            <span style="color: var(--text-secondary);">ХОТЯ ТОЛЬКО ${deviations} ИЗ ${totalChars} ХАРАКТЕРИСТИК ИМЕЮТ ОТКЛОНЕНИЯ, P = ${metrics.base_P.toFixed(4)} > 0.5.<br>
+            ОТКЛОНЕНИЯ СИЛЬНЫЕ, СИГНАЛ ОТКЛОНЕНИЯ CO = ${metrics.Co} ПРЕВЫШАЕТ ПОРОГ.</span>
+        </div>`;
+    
+    document.getElementById('modalContent').innerHTML = `
+        <div style="margin-bottom: 1rem;">
+            <h4 style="color: var(--text-primary);">${product.product_name}</h4>
+            <p style="font-size: 0.7rem; color: var(--text-secondary);">ПОСТАВЩИК: ${product.supplier_name} | КАТЕГОРИЯ: ${product.category || '—'}</p>
+            <span style="display: inline-block; padding: 0.25rem 1rem; background: ${isQuality ? 'var(--success)' : 'var(--danger)'}; color: var(--bg-primary); font-size: 0.7rem; border-radius: var(--radius-sm);">${isQuality ? 'КАЧЕСТВЕННЫЙ' : 'БРАК'}</span>
+        </div>
+        ${explanation}
+        <div style="overflow-x: auto;">
+            <table class="data-table" style="width: 100%; font-size: 0.7rem;">
+                <thead><tr><th style="color: var(--text-primary);">ХАРАКТЕРИСТИКА</th><th style="color: var(--text-primary);">ЕД.</th><th style="color: var(--text-primary);">НОРМА</th><th style="color: var(--text-primary);">РЕАЛЬНОЕ</th><th style="color: var(--text-primary);">N</th><th style="color: var(--text-primary);">LOG₂(N)</th><th style="color: var(--text-primary);">ВЕС</th><th style="color: var(--text-primary);">СТАТУС</th></tr></thead>
+                <tbody>${charsHtml}</tbody>
+            </table>
+        </div>
+        <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: var(--radius-sm); font-size: 0.7rem;">
+            <strong style="color: var(--text-primary);">РАСЧЁТ:</strong> <span style="color: var(--text-secondary);">CH = ${metrics.Ch}, CO = ${metrics.Co}, GO = ${metrics.Go.toFixed(3)}, P = ${metrics.P.toFixed(4)}</span><br>
+            <strong style="color: var(--text-primary);">БАЗОВОЕ P (Δx=1.0):</strong> <span style="color: var(--text-secondary);">${metrics.base_P.toFixed(4)} — ОПРЕДЕЛЯЕТ ВЕРДИКТ</span>
+        </div>`;
+    document.getElementById('detailModal').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
+
+async function exportCurrentProduct(format) {
+    if (!currentProductId || !currentSupplierId) { alert('НЕТ ДАННЫХ'); return; }
+    window.open(`/api/spzr/product-export?product_id=${currentProductId}&supplier_id=${currentSupplierId}&delta_x=${currentDelta}&format=${format}`, '_blank');
+}
+
+async function exportSPZR(format) { window.open(`/api/spzr/export?delta_x=${currentDelta}&format=${format}`, '_blank'); }
+window.onclick = function(e) { if (e.target === document.getElementById('detailModal')) closeModal(); }
+</script>
+
+<style>
+.spzr-dashboard .stat-number { font-weight: 700; line-height: 1.2; }
+</style>
+{% endblock %}

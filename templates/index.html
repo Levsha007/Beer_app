@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Главная - Склад Пива{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1 class="page-title">Склад пивной продукции</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.9rem; letter-spacing: 1px;">
+        ВАРИАНТ 5 | СИСТЕМА ПОДДЕРЖКИ ПРИНЯТИЯ РЕШЕНИЙ (ПОРОГОВЫЙ МЕТОД)
+    </p>
+    
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="stat-card">
+            <h3 style="color: var(--text-primary); margin-bottom: 0.5rem; font-size: 0.8rem;">ТАБЛИЦЫ В БД</h3>
+            <p style="font-size: 2rem; font-weight: 700; color: var(--accent-color); margin: 0.5rem 0;">{{ tables|length }}</p>
+            <a href="/data" class="btn btn-primary" style="margin-top: 0.75rem;">УПРАВЛЕНИЕ ДАННЫМИ</a>
+        </div>
+        
+        <div class="stat-card">
+            <h3 style="color: var(--text-primary); margin-bottom: 0.5rem; font-size: 0.8rem;">СППР</h3>
+            <p style="font-size: 0.9rem; font-weight: 500; margin: 0.5rem 0;">ПОРОГОВАЯ ДИАГНОСТИКА</p>
+            <a href="/spzr" class="btn btn-success" style="margin-top: 0.75rem;">ОЦЕНИТЬ КАЧЕСТВО</a>
+        </div>
+        
+        <div class="stat-card">
+            <h3 style="color: var(--text-primary); margin-bottom: 0.5rem; font-size: 0.8rem;">СЕРВИС</h3>
+            <p style="font-size: 0.9rem; font-weight: 500; margin: 0.5rem 0;">БЭКАП И АРХИВАЦИЯ</p>
+            <a href="/service" class="btn" style="margin-top: 0.75rem; background: var(--accent-color); color: var(--bg-primary);">ПЕРЕЙТИ</a>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3 style="color: var(--text-primary); margin-bottom: 1rem;">СПИСОК ТАБЛИЦ</h3>
+        
+        {% if tables %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem;">
+            {% for table in tables %}
+            <div style="background: var(--bg-primary); border-radius: var(--radius-sm); padding: 1rem; border: 1px solid var(--border-color);">
+                <h4 style="color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">{{ table }}</h4>
+                <p style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 1rem;">
+                    ЗАПИСЕЙ: <strong>{{ table_counts.get(table, 0) }}</strong>
+                </p>
+                <div style="display: flex; gap: 0.5rem;">
+                    <a href="/data?table={{ table }}" class="btn btn-sm" style="background: var(--bg-secondary);">ДАННЫЕ</a>
+                    <a href="/query?table={{ table }}" class="btn btn-sm" style="background: var(--bg-secondary);">ЗАПРОС</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="text-align: center; padding: 2rem; color: var(--text-muted);">
+            НЕТ ДОСТУПНЫХ ТАБЛИЦ. ИНИЦИАЛИЗАЦИЯ БД ПРОИЗОЙДЁТ АВТОМАТИЧЕСКИ.
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

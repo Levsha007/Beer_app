@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Склад Пива - ИС{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-icon">B</div>
+                <div class="sidebar-title">Склад Пива</div>
+                <div class="sidebar-subtitle">Вариант 5</div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item" data-nav="home">Главная</a>
+                <a href="/data" class="nav-item" data-nav="data">Данные</a>
+                <a href="/query" class="nav-item" data-nav="query">Запросы</a>
+                <a href="/schema" class="nav-item" data-nav="schema">Схема данных</a>
+                <a href="/spzr" class="nav-item" data-nav="spzr">СППР</a>
+                <a href="/spzr/docs" class="nav-item" data-nav="docs">Документация</a>
+                <a href="/service" class="nav-item" data-nav="service">Сервис</a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="footer-text">ИНФОРМАЦИОННАЯ СИСТЕМА</div>
+                <div class="footer-text">СКЛАДА ПИВА</div>
+            </div>
+        </aside>
+        <main class="main-content">
+            <div class="content-container">
+                {% block content %}{% endblock %}
+            </div>
+            <footer class="content-footer">
+                <p>СИСТЕМА ПОДДЕРЖКИ ПРИНЯТИЯ РЕШЕНИЙ | ПОРОГОВЫЙ МЕТОД ДИАГНОСТИКИ</p>
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        (function() {
+            function setActiveNavItem() {
+                const currentPath = window.location.pathname;
+                const navItems = document.querySelectorAll('.nav-item');
+                
+                navItems.forEach(item => {
+                    item.classList.remove('active');
+                    const itemPath = item.getAttribute('href');
+                    
+                    if (itemPath === '/') {
+                        if (currentPath === '/') item.classList.add('active');
+                    } else if (itemPath === '/spzr/docs') {
+                        if (currentPath === '/spzr/docs') item.classList.add('active');
+                    } else if (itemPath === '/spzr') {
+                        if (currentPath === '/spzr') item.classList.add('active');
+                    } else if (itemPath !== '/' && currentPath.startsWith(itemPath)) {
+                        if (itemPath !== '/spzr' || currentPath !== '/spzr/docs') {
+                            item.classList.add('active');
+                        }
+                    }
+                });
+            }
+            setActiveNavItem();
+        })();
+    </script>
+</body>
+</html>

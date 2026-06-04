@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}Документация СППР{% endblock %}
+
+{% block content %}
+<div class="docs-container" style="max-width: 1200px; margin: 0 auto;">
+    <h1 class="page-title">ДОКУМЕНТАЦИЯ СИСТЕМЫ ПОДДЕРЖКИ ПРИНЯТИЯ РЕШЕНИЙ</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.8rem;">
+        ПОЛНОЕ ОПИСАНИЕ АЛГОРИТМОВ ПОРОГОВОГО МЕТОДА ДИАГНОСТИКИ КАЧЕСТВА ПИВНОЙ ПРОДУКЦИИ
+    </p>
+
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1.5rem;">ИСТОЧНИК</h2>
+        <div style="background: var(--bg-secondary); padding: 1.5rem;">
+            <p><strong>МЕТОДИЧЕСКИЕ УКАЗАНИЯ:</strong> "СОЗДАНИЕ ИНФОРМАЦИОННОЙ СИСТЕМЫ СРЕДСТВАМИ MICROSOFT ACCESS"</p>
+            <p><strong>РАЗДЕЛ:</strong> 2.3. СОЗДАНИЕ ИНФОРМАЦИОННОЙ СИСТЕМЫ ПОДДЕРЖКИ ПРИНЯТИЯ РЕШЕНИЙ (СППР)</p>
+            <p><strong>ВАРИАНТ:</strong> 5 — СКЛАД ПИВА</p>
+        </div>
+    </div>
+
+    <div style="background: rgba(255,204,0,0.1); border: 1px solid var(--border-color); padding: 2rem; border-left: 4px solid var(--warning); margin-bottom: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1rem;">ВАЖНОЕ ЗАМЕЧАНИЕ О РАБОТЕ СППР</h2>
+        <p><strong>ВЕРДИКТ (КАЧЕСТВЕННЫЙ/БРАК) НЕ ЗАВИСИТ ОТ ТЕКУЩЕГО ЗНАЧЕНИЯ DELTA X!</strong></p>
+        <p>DELTA X ИСПОЛЬЗУЕТСЯ ТОЛЬКО ДЛЯ РАСЧЕТА ГРАДАЦИЙ N, НО ИТОГОВЫЙ ВЕРДИКТ ОПРЕДЕЛЯЕТСЯ ПОРОГОВЫМ ПРАВИЛОМ P ≤ 0.5 С ФИКСИРОВАННЫМ DELTA X = 1.0.</p>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+            <li><strong>БАЗОВЫЙ ВЕРДИКТ</strong> ВЫЧИСЛЯЕТСЯ ОДИН РАЗ С ФИКСИРОВАННЫМ DELTA X = 1.0</li>
+            <li><strong>ТЕКУЩИЙ DELTA X</strong> ВЛИЯЕТ ТОЛЬКО НА ОТОБРАЖЕНИЕ ГРАДАЦИЙ (N), LOG₂(N), CO, GO И ТЕКУЩЕЕ P</li>
+            <li><strong>КОЛИЧЕСТВО КАЧЕСТВЕННЫХ И БРАКОВАННЫХ ТОВАРОВ ОСТАЕТСЯ ПОСТОЯННЫМ</strong> ПРИ ЛЮБОМ DELTA X</li>
+        </ul>
+    </div>
+
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1.5rem;">1. РАСЧЕТ ГРАДАЦИЙ</h2>
+        
+        <div style="background: var(--bg-secondary); padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3>ФОРМУЛА ИЗ МЕТОДИЧКИ:</h3>
+            <div style="background: var(--bg-primary); padding: 1.5rem; font-family: monospace; border: 1px solid var(--border-color);">
+                N = { 2, ЕСЛИ ЗНАЧЕНИЕ В НОРМЕ<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;{ (X - XMAX)/Δx + 1, ЕСЛИ X > XMAX<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;{ (XMIN - X)/Δx + 1, ЕСЛИ X < XMIN
+            </div>
+        </div>
+
+        <div style="background: var(--bg-secondary); padding: 1.5rem;">
+            <h3>РЕАЛИЗАЦИЯ В КОДЕ (MAIN.PY):</h3>
+            <pre style="background: var(--bg-primary); padding: 1rem; overflow-x: auto; font-family: monospace; font-size: 0.7rem; border: 1px solid var(--border-color);">
+def calculate_gradations(x, xmin, xmax, dx):
+    """
+    РАСЧЕТ ГРАДАЦИЙ ПО МЕТОДИЧКЕ
+    x - РЕАЛЬНОЕ ЗНАЧЕНИЕ ХАРАКТЕРИСТИКИ
+    xmin - МИНИМАЛЬНАЯ ГРАНИЦА НОРМЫ
+    xmax - МАКСИМАЛЬНАЯ ГРАНИЦА НОРМЫ
+    dx - ШАГ ИЗМЕРЕНИЯ (ЧУВСТВИТЕЛЬНОСТЬ)
+    """
+    if xmin <= x <= xmax:
+        return 2  # ЗНАЧЕНИЕ В НОРМЕ
+    elif x > xmax:
+        # ОТКЛОНЕНИЕ ВВЕРХ
+        diff = x - xmax
+        n = math.ceil(diff / dx) + 1
+        return max(2, min(n, 100))
+    else:  # x < xmin
+        # ОТКЛОНЕНИЕ ВНИЗ
+        diff = xmin - x
+        n = math.ceil(diff / dx) + 1
+        return max(2, min(n, 100))
+</pre>
+        </div>
+    </div>
+
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1.5rem;">2. ПОКАЗАТЕЛИ CH, CO, GO</h2>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 1.5rem;">
+            <div style="background: var(--bg-secondary); padding: 1.5rem; text-align: center;">
+                <h3>CH</h3>
+                <div style="font-family: monospace; font-size: 1.5rem;">CH = N</div>
+                <p>СИГНАЛ НОРМЫ<br>(КОЛИЧЕСТВО ХАРАКТЕРИСТИК)</p>
+            </div>
+            <div style="background: var(--bg-secondary); padding: 1.5rem; text-align: center;">
+                <h3>CO</h3>
+                <div style="font-family: monospace; font-size: 1.5rem;">CO = Σ LOG₂(Nᵢ)</div>
+                <p>СИГНАЛ ОТКЛОНЕНИЯ<br>(СУММА ДВОИЧНЫХ ЛОГАРИФМОВ)</p>
+            </div>
+            <div style="background: var(--bg-secondary); padding: 1.5rem; text-align: center;">
+                <h3>GO</h3>
+                <div style="font-family: monospace; font-size: 1.5rem;">GO = CO / CH</div>
+                <p>ОТНОШЕНИЕ ОТКЛОНЕНИЕ/НОРМА</p>
+            </div>
+        </div>
+
+        <div style="background: var(--bg-secondary); padding: 1.5rem;">
+            <h3>РЕАЛИЗАЦИЯ В КОДЕ (MAIN.PY):</h3>
+            <pre style="background: var(--bg-primary); padding: 1rem; overflow-x: auto; font-family: monospace; font-size: 0.7rem; border: 1px solid var(--border-color);">
+# РАСЧЕТ ДЛЯ КОНКРЕТНОГО ПРОДУКТА
+chars = db.execute_query(chars_query, (product_id, supplier_id))
+
+current_sum_log2 = 0
+n = len(chars)  # CH = N
+
+for ch in chars:
+    g = calculate_gradations(
+        ch['real_value'],
+        ch['min_norm'],
+        ch['max_norm'],
+        delta_x
+    )
+    current_sum_log2 += math.log2(g)
+
+# CO = СУММА LOG₂(N)
+Co = current_sum_log2
+# CH = КОЛИЧЕСТВО ХАРАКТЕРИСТИК
+Ch = n
+# GO = CO / CH
+Go = Co / Ch if Ch > 0 else 0
+</pre>
+        </div>
+    </div>
+
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1.5rem;">3. ВЕРОЯТНОСТЬ ПРАВИЛЬНОЙ КЛАССИФИКАЦИИ</h2>
+        
+        <div style="background: var(--bg-secondary); padding: 1.5rem; text-align: center; margin-bottom: 1.5rem;">
+            <div style="font-family: monospace; font-size: 1.5rem;">P = E<sup>-LN2 / GO²</sup></div>
+            <p>ГДЕ LN2 ≈ 0.693147</p>
+        </div>
+
+        <div style="background: var(--bg-secondary); padding: 1.5rem;">
+            <h3>РЕАЛИЗАЦИЯ В КОДЕ (MAIN.PY):</h3>
+            <pre style="background: var(--bg-primary); padding: 1rem; overflow-x: auto; font-family: monospace; font-size: 0.7rem; border: 1px solid var(--border-color);">
+import math
+
+if Go > 0:
+    P = math.exp(-math.log(2) / (Go * Go))
+else:
+    P = math.exp(-math.log(2) / 0.0001)
+
+# ОПРЕДЕЛЕНИЕ ВЕРДИКТА
+is_quality = P <= 0.5  # P ОТ 0 ДО 0.5 → КАЧЕСТВЕННЫЙ
+</pre>
+        </div>
+    </div>
+
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1.5rem;">4. ПОРОГОВОЕ РЕШАЮЩЕЕ ПРАВИЛО</h2>
+        
+        <div style="background: var(--bg-secondary); padding: 1.5rem; font-style: italic; text-align: center; margin-bottom: 1.5rem;">
+            "ЗА ДИАПАЗОН НОРМЫ ПРИНИМАЕТСЯ ЗНАЧЕНИЕ ВЕРОЯТНОСТИ P ОТ 0 ДО 0,5"
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <div style="background: rgba(0,255,204,0.1); padding: 1.5rem; text-align: center; border-left: 3px solid var(--success);">
+                <div style="font-weight: 700; font-size: 1.25rem;">P ≤ 0.5</div>
+                <div style="background: var(--success); color: var(--bg-primary); padding: 0.25rem;">КАЧЕСТВЕННЫЙ</div>
+            </div>
+            <div style="background: rgba(255,0,102,0.1); padding: 1.5rem; text-align: center; border-left: 3px solid var(--danger);">
+                <div style="font-weight: 700; font-size: 1.25rem;">P > 0.5</div>
+                <div style="background: var(--danger); color: var(--bg-primary); padding: 0.25rem;">БРАК</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1.5rem;">5. ПОЛНЫЙ АЛГОРИТМ АНАЛИЗА (MAIN.PY)</h2>
+        <pre style="background: var(--bg-secondary); padding: 1.5rem; overflow-x: auto; font-family: monospace; font-size: 0.7rem; border: 1px solid var(--border-color);">
+@app.get("/api/spzr/analyze-all")
+async def analyze_all_quality(delta_x: float = 1.0):
+    # ПОЛУЧАЕМ ВСЕ КОМБИНАЦИИ ПРОДУКТ-ПОСТАВЩИК
+    combinations = db.execute_query(query)
+    
+    results = []
+    for combo in combinations:
+        chars = db.execute_query(chars_query, (combo['product_id'], combo['supplier_id']))
+        
+        # БАЗОВЫЙ ВЕРДИКТ (Δx = 1.0)
+        base_sum_log2 = 0
+        n = len(chars)
+        for ch in chars:
+            g = calculate_gradations(ch['real_value'], ch['min_norm'], ch['max_norm'], 1.0)
+            base_sum_log2 += math.log2(g)
+        
+        base_Go = base_sum_log2 / n if n > 0 else 0
+        base_P = math.exp(-math.log(2) / (base_Go * base_Go))
+        is_quality = base_P <= 0.5  # ← ЭТО ОКОНЧАТЕЛЬНЫЙ ВЕРДИКТ
+        
+        # ТЕКУЩИЙ РАСЧЕТ С ЗАДАННЫМ Δx
+        current_sum_log2 = 0
+        for ch in chars:
+            g = calculate_gradations(ch['real_value'], ch['min_norm'], ch['max_norm'], delta_x)
+            current_sum_log2 += math.log2(g)
+        
+        results.append({
+            'product_id': combo['product_id'],
+            'product_name': combo['product_name'],
+            'supplier_id': combo['supplier_id'],
+            'supplier_name': combo['supplier_name'],
+            'metrics': { 'Ch': n, 'Co': round(current_sum_log2, 3),
+                         'Go': round(current_sum_log2/n, 3), 'is_quality': is_quality }
+        })
+    return {"success": True, "results": results}
+</pre>
+    </div>
+
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1.5rem;">6. МОДЕЛЬ БАЗЫ ДАННЫХ (INIT.SQL)</h2>
+        <pre style="background: var(--bg-secondary); padding: 1.5rem; overflow-x: auto; font-family: monospace; font-size: 0.7rem; border: 1px solid var(--border-color);">
+CREATE TABLE suppliers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    address TEXT, phone VARCHAR(20),
+    contact_person VARCHAR(100), inn VARCHAR(12),
+    email VARCHAR(100), created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT, category VARCHAR(50),
+    base_price DECIMAL(10,2), created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE characteristics (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    unit VARCHAR(20), delta_x_default FLOAT DEFAULT 0.5,
+    weight INTEGER DEFAULT 12, description TEXT
+);
+
+CREATE TABLE product_characteristics (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+    supplier_id INTEGER REFERENCES suppliers(id) ON DELETE CASCADE,
+    characteristic_id INTEGER REFERENCES characteristics(id) ON DELETE CASCADE,
+    min_norm FLOAT NOT NULL, max_norm FLOAT NOT NULL,
+    real_value FLOAT NOT NULL, measurement_date TIMESTAMP DEFAULT NOW()
+);
+</pre>
+    </div>
+
+    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 2rem;">
+        <h2 style="color: var(--text-primary); margin-bottom: 1.5rem;">7. РАСПОЛОЖЕНИЕ В КОДЕ</h2>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+            <div style="background: var(--bg-secondary); padding: 1.5rem;">
+                <h3>MAIN.PY</h3>
+                <ul>
+                    <li><code>calculate_gradations()</code> — РАСЧЕТ ГРАДАЦИЙ</li>
+                    <li><code>analyze_all_quality()</code> — АНАЛИЗ ВСЕХ ПРОДУКТОВ</li>
+                    <li><code>get_product_detail()</code> — ДЕТАЛИ ТОВАРА</li>
+                </ul>
+            </div>
+            <div style="background: var(--bg-secondary); padding: 1.5rem;">
+                <h3>DATABASE.PY</h3>
+                <ul>
+                    <li><code>get_connection()</code> — ПОДКЛЮЧЕНИЕ К БД</li>
+                    <li><code>execute_query()</code> — ВЫПОЛНЕНИЕ SQL</li>
+                    <li><code>get_table_data()</code> — ПОЛУЧЕНИЕ ДАННЫХ</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.docs-container pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.docs-container code {
+    font-family: monospace;
+    background: var(--bg-secondary);
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+}
+.docs-container ul, .docs-container ol { margin-left: 1.5rem; }
+.docs-container li { font-size: 0.7rem; margin-bottom: 0.5rem; }
+</style>
+{% endblock %}

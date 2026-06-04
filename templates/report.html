@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Отчет о качестве продукции{% endblock %}
+
+{% block content %}
+<div class="report-container">
+    <div class="report-header">
+        <h1 class="report-title">ОТЧЕТ О КАЧЕСТВЕ ПРОДУКЦИИ</h1>
+        <p class="report-subtitle">СКЛАД ПИВА (ВАРИАНТ 5)</p>
+        <p class="report-date">ДАТА ФОРМИРОВАНИЯ: {{ date }}</p>
+    </div>
+    
+    <div class="report-info-grid">
+        <div class="report-info-card">
+            <h3>ПОСТАВЩИК</h3>
+            <p>{{ supplier.name }}</p>
+        </div>
+        <div class="report-info-card">
+            <h3>ПРОДУКЦИЯ</h3>
+            <p>{{ product.name }}</p>
+        </div>
+    </div>
+    
+    <div class="report-results">
+        <div class="results-header">
+            <h3>РЕЗУЛЬТАТЫ ПОРОГОВОЙ ДИАГНОСТИКИ</h3>
+            <div class="verdict-badge verdict-{% if metrics.is_quality %}good{% else %}bad{% endif %}">
+                {{ metrics.verdict }}
+            </div>
+        </div>
+        
+        <div class="metrics-grid">
+            <div class="metric-item">
+                <div class="metric-label">СИГНАЛ НОРМЫ (Ch)</div>
+                <div class="metric-value">{{ metrics.Ch }}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">СИГНАЛ ОТКЛОНЕНИЯ (Co)</div>
+                <div class="metric-value">{{ metrics.Co }}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">ОТНОШЕНИЕ Go</div>
+                <div class="metric-value">{{ metrics.Go }}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">ВЕРОЯТНОСТЬ P</div>
+                <div class="metric-value">{{ metrics.P }}</div>
+            </div>
+        </div>
+        
+        <h4>ХАРАКТЕРИСТИКИ ПРОДУКЦИИ</h4>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ХАРАКТЕРИСТИКА</th>
+                        <th>ЕД. ИЗМ.</th>
+                        <th>НОРМА (MIN-MAX)</th>
+                        <th>РЕАЛЬНОЕ</th>
+                        <th>ГРАДАЦИИ (n)</th>
+                        <th>LOG₂(n)</th>
+                        <th>ВЕС</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in characteristics %}
+                    <tr class="{% if c.real < c.min or c.real > c.max %}deviation-row{% endif %}">
+                        <td><strong>{{ c.name }}</strong></td>
+                        <td>{{ c.unit or '-' }}</td>
+                        <td>{{ c.min }} — {{ c.max }}</div>
+                        <td class="real-value {% if c.real < c.min or c.real > c.max %}deviation-value{% endif %}">
+                            {{ c.real }}
+                        </div>
+                        <td>{{ c.gradations }}</div>
+                        <td>{{ c.log2 }}</div>
+                        <td>{{ c.weight }}</div>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="report-footer">
+            <p><strong>ПАРАМЕТРЫ РАСЧЕТА:</strong> ШАГ ΔX = {{ delta_x }}</p>
+            <p>ПОРОГОВОЕ ПРАВИЛО: P ≤ 0.5 → ПРОДУКЦИЯ КАЧЕСТВЕННАЯ</p>
+        </div>
+    </div>
+    
+    <div class="report-actions">
+        <button onclick="window.print()" class="btn btn-primary">ПЕЧАТЬ ОТЧЕТА</button>
+        <a href="/spzr" class="btn">НОВЫЙ АНАЛИЗ</a>
+    </div>
+</div>
+
+<style>
+.report-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.report-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.report-title {
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.report-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.report-date {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    margin-top: 0.5rem;
+}
+
+.report-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.report-info-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    padding: 1rem;
+}
+
+.report-info-card h3 {
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    margin-bottom: 0.5rem;
+}
+
+.report-info-card p {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.report-results {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.results-header h3 {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.verdict-badge {
+    padding: 0.25rem 1rem;
+    color: var(--bg-primary);
+}
+
+.verdict-good {
+    background: var(--success);
+}
+
+.verdict-bad {
+    background: var(--danger);
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.metric-item {
+    text-align: center;
+}
+
+.metric-label {
+    color: var(--text-muted);
+    font-size: 0.6rem;
+}
+
+.metric-value {
+    color: var(--text-primary);
+    font-size: 1.2rem;
+}
+
+.report-results h4 {
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+}
+
+.real-value {
+    font-weight: normal;
+}
+
+.deviation-value {
+    color: var(--danger);
+    font-weight: bold;
+}
+
+.deviation-row {
+    background: rgba(255, 0, 102, 0.1);
+}
+
+.report-footer {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-light);
+    font-size: 0.7rem;
+}
+
+.report-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+</style>
+{% endblock %}

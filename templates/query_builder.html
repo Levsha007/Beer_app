@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+
+{% block title %}Конструктор запросов - Склад Пива{% endblock %}
+
+{% block content %}
+<div class="query-builder">
+    <h1 class="page-title">КОНСТРУКТОР SQL ЗАПРОСОВ</h1>
+    
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+        <div style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1.5rem; border: 1px solid var(--border-color);">
+            <h3 style="color: var(--text-primary); margin-bottom: 1rem;">SQL ЗАПРОС</h3>
+            
+            <div style="margin-bottom: 1rem;">
+                <textarea id="sqlQuery" style="width: 100%; height: 200px; padding: 1rem; font-family: 'Courier New', monospace; background: var(--bg-primary); color: var(--text-primary); border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.8rem; resize: vertical;" 
+                    placeholder="SELECT * FROM products LIMIT 100">{% if request.query_params.get('table') %}SELECT * FROM {{ request.query_params.get('table') }} LIMIT 100{% else %}-- КАЧЕСТВЕННЫЕ ПРОДУКТЫ (НИ ОДНОЙ БРАКОВАННОЙ ХАРАКТЕРИСТИКИ)
+SELECT DISTINCT
+    s.name AS supplier,
+    p.name AS product,
+    p.category
+FROM products p
+JOIN product_characteristics pc ON p.id = pc.product_id
+JOIN suppliers s ON pc.supplier_id = s.id
+WHERE NOT EXISTS (
+    SELECT 1 FROM product_characteristics pc2
+    WHERE pc2.product_id = p.id
+    AND pc2.supplier_id = s.id
+    AND (pc2.real_value < pc2.min_norm OR pc2.real_value > pc2.max_norm)
+)
+ORDER BY s.name, p.name
+LIMIT 50{% endif %}</textarea>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                <button onclick="executeQuery()" class="btn btn-primary">ВЫПОЛНИТЬ</button>
+                <button onclick="exportQuery('excel')" class="btn btn-success">EXCEL</button>
+                <button onclick="exportQuery('json')" class="btn" style="background: var(--accent-color); color: var(--bg-primary);">JSON</button>
+                <button onclick="clearQuery()" class="btn">ОЧИСТИТЬ</button>
+            </div>
+            
+            <div style="background: var(--bg-primary); padding: 1rem; border-radius: var(--radius-sm);">
+                <h4 style="color: var(--text-primary); margin-bottom: 0.5rem; font-size: 0.7rem;">ПРИМЕРЫ ЗАПРОСОВ</h4>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button onclick="loadExample('quality')" class="btn btn-sm" style="background: var(--bg-secondary);">КАЧЕСТВЕННЫЕ</button>
+                    <button onclick="loadExample('defect')" class="btn btn-sm" style="background: var(--bg-secondary);">БРАК</button>
+                    <button onclick="loadExample('suppliers')" class="btn btn-sm" style="background: var(--bg-secondary);">ПОСТАВЩИКИ</button>
+                    <button onclick="loadExample('stats')" class="btn btn-sm" style="background: var(--bg-secondary);">СТАТИСТИКА</button>
+                    <button onclick="loadExample('defect_stats')" class="btn btn-sm" style="background: var(--bg-secondary);">СТАТИСТИКА БРАКА</button>
+                    <button onclick="loadExample('characteristic_stats')" class="btn btn-sm" style="background: var(--bg-secondary);">ПО ХАРАКТЕРИСТИКАМ</button>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <div style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1.5rem; border: 1px solid var(--border-color);">
+                <h3 style="color: var(--text-primary); margin-bottom: 0.75rem;">СПРАВКА ПО ТАБЛИЦАМ</h3>
+                <div style="background: var(--bg-primary); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+                    <p style="margin-bottom: 0.5rem; font-size: 0.7rem;"><strong>ОСНОВНЫЕ ТАБЛИЦЫ:</strong></p>
+                    <ul style="list-style: none; padding: 0; font-size: 0.7rem;">
+                        <li style="margin-bottom: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border-light);">
+                            <strong>suppliers</strong> — поставщики (id, name, address, phone, contact_person, inn, email)
+                        </li>
+                        <li style="margin-bottom: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border-light);">
+                            <strong>products</strong> — продукция (id, name, description, category, base_price)
+                        </li>
+                        <li style="margin-bottom: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border-light);">
+                            <strong>characteristics</strong> — характеристики (id, name, unit, delta_x_default, weight)
+                        </li>
+                        <li style="margin-bottom: 0.5rem; padding: 0.3rem 0;">
+                            <strong>product_characteristics</strong> — связь (id, product_id, supplier_id, characteristic_id, min_norm, max_norm, real_value)
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1.5rem; border: 1px solid var(--border-color);">
+                <h3 style="color: var(--text-primary); margin-bottom: 1rem;">СПИСОК ТАБЛИЦ</h3>
+                <input type="text" id="tableSearch" class="form-control" placeholder="ПОИСК ТАБЛИЦЫ..." style="margin-bottom: 1rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; max-height: 250px; overflow-y: auto; padding-right: 0.25rem;">
+                    {% for table in tables %}
+                    <div onclick="insertTableName('{{ table }}')" 
+                         style="background: var(--bg-primary); padding: 0.6rem; border-radius: var(--radius-sm); cursor: pointer; text-align: center; border: 1px solid var(--border-color); transition: 0.1s; font-size: 0.7rem;"
+                         onmouseover="this.style.background='var(--accent-soft)';"
+                         onmouseout="this.style.background='var(--bg-primary)';">
+                        {{ table }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="queryResults" style="display: none; margin-top: 2rem; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1.5rem; border: 1px solid var(--border-color);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+            <h3 style="color: var(--text-primary); font-size: 0.9rem;">РЕЗУЛЬТАТЫ ЗАПРОСА</h3>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <span style="background: var(--bg-primary); padding: 0.4rem 1rem; border-radius: var(--radius-sm);">
+                    НАЙДЕНО: <strong id="resultCount">0</strong> ЗАПИСЕЙ
+                </span>
+                <span id="queryTime" style="background: var(--bg-primary); padding: 0.4rem 1rem; border-radius: var(--radius-sm); font-size: 0.7rem;">
+                    <span id="queryTimeValue">0</span> МС
+                </span>
+            </div>
+        </div>
+        <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+            <table id="resultsTable" class="data-table">
+                <thead><tr><th>...</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button onclick="exportCurrentResults('excel')" class="btn btn-sm btn-success">EXCEL</button>
+            <button onclick="exportCurrentResults('json')" class="btn btn-sm" style="background: var(--accent-color); color: var(--bg-primary);">JSON</button>
+        </div>
+    </div>
+    
+    <div id="loadingIndicator" style="display: none; text-align: center; padding: 2rem;">
+        <div class="loading">ВЫПОЛНЕНИЕ ЗАПРОСА...</div>
+    </div>
+    
+    <div id="errorMessage" style="display: none; margin-top: 1rem; background: rgba(255,0,102,0.2); color: var(--danger); padding: 1rem; border-radius: var(--radius-sm); border-left: 3px solid var(--danger);">
+    </div>
+</div>
+
+<script>
+let lastResults = null;
+let lastSql = '';
+
+function insertTableName(tableName) {
+    const textarea = document.getElementById('sqlQuery');
+    const cursorPos = textarea.selectionStart;
+    const text = textarea.value;
+    textarea.value = text.substring(0, cursorPos) + tableName + text.substring(cursorPos);
+    textarea.focus();
+}
+
+function loadExample(type) {
+    const examples = {
+        quality: `-- КАЧЕСТВЕННЫЕ ПРОДУКТЫ (НИ ОДНОЙ БРАКОВАННОЙ ХАРАКТЕРИСТИКИ)
+SELECT DISTINCT
+    s.name AS supplier,
+    p.name AS product,
+    p.category
+FROM products p
+JOIN product_characteristics pc ON p.id = pc.product_id
+JOIN suppliers s ON pc.supplier_id = s.id
+WHERE NOT EXISTS (
+    SELECT 1 FROM product_characteristics pc2
+    WHERE pc2.product_id = p.id
+    AND pc2.supplier_id = s.id
+    AND (pc2.real_value < pc2.min_norm OR pc2.real_value > pc2.max_norm)
+)
+ORDER BY s.name, p.name
+LIMIT 50;`,
+        
+        defect: `-- БРАКОВАННЫЕ ПРОДУКТЫ (ЕСТЬ ХОТЯ БЫ ОДНА ХАРАКТЕРИСТИКА ВНЕ НОРМЫ)
+SELECT 
+    s.name AS supplier,
+    p.name AS product,
+    c.name AS characteristic,
+    pc.real_value,
+    pc.min_norm,
+    pc.max_norm,
+    CASE 
+        WHEN pc.real_value < pc.min_norm THEN 'НИЖЕ НОРМЫ'
+        WHEN pc.real_value > pc.max_norm THEN 'ВЫШЕ НОРМЫ'
+        ELSE 'В НОРМЕ'
+    END AS status
+FROM product_characteristics pc
+JOIN suppliers s ON pc.supplier_id = s.id
+JOIN products p ON pc.product_id = p.id
+JOIN characteristics c ON pc.characteristic_id = c.id
+WHERE pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm
+ORDER BY s.name, p.name, c.name
+LIMIT 20;`,
+        
+        suppliers: `-- ВСЕ ПОСТАВЩИКИ
+SELECT id, name, address, phone, contact_person, inn, email
+FROM suppliers
+ORDER BY name;`,
+        
+        stats: `-- СТАТИСТИКА ПО КАЖДОМУ ПРОДУКТУ
+SELECT 
+    p.name AS product,
+    p.category,
+    COUNT(DISTINCT pc.id) AS total_checks,
+    COUNT(DISTINCT pc.characteristic_id) AS unique_characteristics,
+    ROUND(AVG(pc.real_value)::numeric, 2) AS avg_value,
+    COUNT(CASE 
+        WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm 
+        THEN 1 
+    END) AS defects,
+    ROUND(100.0 * COUNT(CASE 
+            WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm 
+            THEN 1 
+        END) / NULLIF(COUNT(pc.id), 0), 2) AS defect_percent
+FROM products p
+LEFT JOIN product_characteristics pc ON p.id = pc.product_id
+GROUP BY p.id, p.name, p.category
+HAVING COUNT(pc.id) > 0
+ORDER BY defects DESC;`,
+        
+        defect_stats: `-- СТАТИСТИКА БРАКА ПО ХАРАКТЕРИСТИКАМ
+SELECT 
+    c.name AS characteristic,
+    c.unit,
+    COUNT(*) AS total_measurements,
+    COUNT(CASE WHEN pc.real_value < pc.min_norm THEN 1 END) AS below_norm,
+    COUNT(CASE WHEN pc.real_value > pc.max_norm THEN 1 END) AS above_norm,
+    ROUND(100.0 * COUNT(CASE 
+            WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm 
+            THEN 1 
+        END) / COUNT(*), 2) AS defect_percent
+FROM product_characteristics pc
+JOIN characteristics c ON pc.characteristic_id = c.id
+GROUP BY c.id, c.name, c.unit
+ORDER BY defect_percent DESC;`,
+        
+        characteristic_stats: `-- СТАТИСТИКА ПО КАЖДОМУ ПРОДУКТУ И ПОСТАВЩИКУ
+WITH product_stats AS (
+    SELECT 
+        p.id, p.name AS product_name, p.category,
+        s.id AS supplier_id, s.name AS supplier_name,
+        COUNT(pc.id) AS total_chars,
+        COUNT(CASE WHEN pc.real_value BETWEEN pc.min_norm AND pc.max_norm THEN 1 END) AS in_norm
+    FROM products p
+    CROSS JOIN suppliers s
+    LEFT JOIN product_characteristics pc ON p.id = pc.product_id AND s.id = pc.supplier_id
+    GROUP BY p.id, p.name, p.category, s.id, s.name
+)
+SELECT 
+    product_name, category, supplier_name,
+    total_chars, in_norm,
+    total_chars - in_norm AS defects,
+    ROUND(100.0 * (total_chars - in_norm) / NULLIF(total_chars, 0), 2) AS defect_percent
+FROM product_stats
+WHERE total_chars > 0
+ORDER BY defect_percent DESC;`
+    };
+    
+    if (examples[type]) {
+        document.getElementById('sqlQuery').value = examples[type];
+    }
+}
+
+async function executeQuery() {
+    const sql = document.getElementById('sqlQuery').value.trim();
+    if (!sql) {
+        alert('ВВЕДИТЕ SQL ЗАПРОС');
+        return;
+    }
+    
+    lastSql = sql;
+    
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('queryResults').style.display = 'none';
+    document.getElementById('errorMessage').style.display = 'none';
+    
+    const startTime = performance.now();
+    
+    try {
+        const response = await fetch('/api/query/execute', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({sql: sql})
+        });
+        
+        const endTime = performance.now();
+        document.getElementById('queryTimeValue').textContent = Math.round(endTime - startTime);
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            lastResults = result.data;
+            displayResults(result.data);
+            document.getElementById('resultCount').textContent = result.count || 0;
+            document.getElementById('queryResults').style.display = 'block';
+        } else {
+            showError(result.error || 'ОШИБКА ВЫПОЛНЕНИЯ ЗАПРОСА');
+        }
+    } catch (e) {
+        showError('ОШИБКА СОЕДИНЕНИЯ: ' + e.message);
+    } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+function displayResults(data) {
+    const table = document.getElementById('resultsTable');
+    
+    if (!data || data.length === 0) {
+        table.innerHTML = '<thead><tr><th>РЕЗУЛЬТАТ</th></tr></thead><tbody><tr><td style="text-align: center; padding: 2rem;">ЗАПРОС ВЫПОЛНЕН, НО НЕ ВЕРНУЛ ДАННЫХ</td></tr></tbody>';
+        return;
+    }
+    
+    const headers = Object.keys(data[0]);
+    let thead = '<thead><tr>';
+    headers.forEach(h => thead += `<th>${h}</th>`);
+    thead += '</tr></thead>';
+    
+    let tbody = '<tbody>';
+    data.forEach(row => {
+        tbody += '<tr>';
+        headers.forEach(h => {
+            let val = row[h];
+            if (val === null || val === undefined) {
+                val = '<span class="null-value">NULL</span>';
+            } else if (typeof val === 'object') {
+                val = JSON.stringify(val);
+            } else {
+                val = String(val);
+            }
+            tbody += `<td>${val}</td>`;
+        });
+        tbody += '</tr>';
+    });
+    tbody += '</tbody>';
+    
+    table.innerHTML = thead + tbody;
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').style.display = 'block';
+    document.getElementById('errorMessage').textContent = 'ОШИБКА: ' + message;
+}
+
+async function exportQuery(format) {
+    const sql = document.getElementById('sqlQuery').value.trim();
+    if (!sql) {
+        alert('ВВЕДИТЕ SQL ЗАПРОС');
+        return;
+    }
+    await exportData(sql, format, 'query_result');
+}
+
+async function exportCurrentResults(format) {
+    if (!lastResults || lastResults.length === 0) {
+        alert('НЕТ ДАННЫХ ДЛЯ ЭКСПОРТА');
+        return;
+    }
+    await exportData(lastSql, format, 'current_results', lastResults);
+}
+
+async function exportData(sql, format, prefix, data = null) {
+    const formData = new FormData();
+    formData.append('sql', sql);
+    formData.append('format', format === 'excel' ? 'excel' : 'json');
+    if (data) formData.append('data', JSON.stringify(data));
+    
+    try {
+        const response = await fetch('/api/query/export', {method: 'POST', body: formData});
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${prefix}_${Date.now()}.${format === 'excel' ? 'xlsx' : 'json'}`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } else {
+            const err = await response.json();
+            alert('ОШИБКА: ' + (err.error || 'ОШИБКА ЭКСПОРТА'));
+        }
+    } catch (e) {
+        alert('ОШИБКА: ' + e.message);
+    }
+}
+
+function clearQuery() {
+    document.getElementById('sqlQuery').value = '';
+    document.getElementById('queryResults').style.display = 'none';
+    document.getElementById('errorMessage').style.display = 'none';
+    lastResults = null;
+}
+
+document.getElementById('tableSearch')?.addEventListener('keyup', function(e) {
+    const search = e.target.value.toLowerCase();
+    const tables = document.querySelectorAll('[onclick^="insertTableName"]');
+    tables.forEach(el => {
+        const name = el.textContent.toLowerCase();
+        el.style.display = name.includes(search) ? 'block' : 'none';
+    });
+});
+</script>
+
+<style>
+.null-value { color: var(--text-muted); font-style: italic; }
+#resultsTable { font-size: 0.7rem; }
+#resultsTable td { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#resultsTable td:hover { white-space: normal; word-wrap: break-word; background: var(--accent-soft); }
+</style>
+{% endblock %}

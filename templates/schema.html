@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block title %}Схема данных - Склад Пива{% endblock %}
+
+{% block content %}
+<div class="schema-container">
+    <h1 class="page-title">СХЕМА ДАННЫХ</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.8rem;">
+        ВИЗУАЛЬНОЕ ПРЕДСТАВЛЕНИЕ СВЯЗЕЙ МЕЖДУ ТАБЛИЦАМИ БАЗЫ ДАННЫХ
+    </p>
+
+    <div style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1rem 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border-color); display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span style="font-weight: 500; font-size: 0.7rem;">МАСШТАБ:</span>
+            <button onclick="zoomIn()" class="btn btn-sm" style="padding: 0.3rem 0.8rem;">+</button>
+            <span id="zoomLevel" style="min-width: 60px; text-align: center;">100%</span>
+            <button onclick="zoomOut()" class="btn btn-sm" style="padding: 0.3rem 0.8rem;">-</button>
+            <button onclick="resetZoom()" class="btn btn-sm">СБРОС</button>
+            <button onclick="resetPositions()" class="btn btn-sm" style="background: var(--accent-color); color: var(--bg-primary);">СБРОСИТЬ ПОЗИЦИИ</button>
+        </div>
+        
+        <div style="display: flex; gap: 0.5rem; align-items: center; margin-left: auto;">
+            <button onclick="toggleAllTables()" class="btn btn-sm" style="background: var(--accent-color); color: var(--bg-primary);">СКРЫТЬ/ПОКАЗАТЬ ВСЕ</button>
+            <button onclick="exportSchema()" class="btn btn-sm btn-success">СОХРАНИТЬ КАК PNG</button>
+            <button onclick="showSqlDdl()" class="btn btn-sm" style="background: var(--bg-primary);">SQL DDL</button>
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 2rem; margin-bottom: 1rem; flex-wrap: wrap; background: var(--bg-primary); padding: 0.8rem 1.5rem; border-radius: var(--radius-sm); font-size: 0.6rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 20px; height: 20px; background: var(--accent-color); border-radius: 2px;"></span>
+            <span>ПЕРВИЧНЫЙ КЛЮЧ (PK)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 20px; height: 20px; background: var(--text-muted); border-radius: 2px;"></span>
+            <span>ВНЕШНИЙ КЛЮЧ (FK)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 30px; height: 2px; background: var(--text-primary);"></span>
+            <span>СВЯЗЬ ОДИН-КО-МНОГИМ</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 30px; height: 2px; background: var(--text-primary); border-bottom: 2px dashed var(--text-primary);"></span>
+            <span>КАСКАДНОЕ УДАЛЕНИЕ</span>
+        </div>
+    </div>
+
+    <div id="schemaWrapper" style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 2rem; border: 1px solid var(--border-color); overflow: auto; min-height: 600px; position: relative;">
+        <div id="schemaCanvas" style="position: relative; min-width: 1200px; min-height: 700px; transform-origin: 0 0; transition: transform 0.2s;">
+            <svg id="relationshipsSvg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;"></svg>
+            <div id="tablesContainer" style="position: relative; z-index: 2;"></div>
+        </div>
+    </div>
+
+    <div style="margin-top: 2rem; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1.5rem; border: 1px solid var(--border-color);">
+        <h3 style="color: var(--text-primary); margin-bottom: 1rem;">ДЕТАЛИ СВЯЗЕЙ</h3>
+        <div style="overflow-x: auto;">
+            <table class="data-table" id="relationshipsTable">
+                <thead>
+                    <tr>
+                        <th>РОДИТЕЛЬСКАЯ ТАБЛИЦА</th>
+                        <th>ПОЛЕ</th>
+                        <th></th>
+                        <th>ДОЧЕРНЯЯ ТАБЛИЦА</th>
+                        <th>ПОЛЕ</th>
+                        <th>ТИП СВЯЗИ</th>
+                        <th>КАСКАДНОЕ УДАЛЕНИЕ</th>
+                    </tr>
+                </thead>
+                <tbody id="relationshipsBody">
+                    <tr><td colspan="7" style="text-align: center; padding: 2rem;">ЗАГРУЗКА ДАННЫХ...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="sqlModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 2rem; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="color: var(--text-primary);">SQL DDL (СТРУКТУРА ТАБЛИЦ)</h3>
+                <button onclick="closeSqlModal()" style="background: none; border: 1px solid var(--border-color); padding: 0.25rem 0.75rem; cursor: pointer; color: var(--text-primary);">X</button>
+            </div>
+            <pre id="sqlDdlContent" style="background: var(--bg-primary); color: var(--text-primary); padding: 1.5rem; border-radius: var(--radius-sm); overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.7rem; white-space: pre-wrap;"></pre>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end;">
+                <button onclick="copySqlToClipboard()" class="btn btn-primary">КОПИРОВАТЬ</button>
+                <button onclick="closeSqlModal()" class="btn">ЗАКРЫТЬ</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let tables = [];
+let relationships = [];
+let currentZoom = 1.0;
+let tableElements = {};
+let isDragging = false;
+
+const DEFAULT_POSITIONS = {
+    'suppliers': { x: 50, y: 50 },
+    'products': { x: 450, y: 50 },
+    'characteristics': { x: 50, y: 350 },
+    'product_characteristics': { x: 450, y: 200 }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSchema();
+    const wrapper = document.getElementById('schemaWrapper');
+    wrapper.addEventListener('wheel', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            currentZoom = Math.min(Math.max(currentZoom + delta, 0.5), 2.0);
+            updateZoom();
+        }
+    });
+});
+
+function zoomIn() { currentZoom = Math.min(currentZoom + 0.1, 2.0); updateZoom(); }
+function zoomOut() { currentZoom = Math.max(currentZoom - 0.1, 0.5); updateZoom(); }
+function resetZoom() { currentZoom = 1.0; updateZoom(); }
+
+function resetPositions() {
+    localStorage.removeItem('tablePositions');
+    renderTables();
+    setTimeout(renderRelationships, 100);
+}
+
+function updateZoom() {
+    document.getElementById('zoomLevel').textContent = Math.round(currentZoom * 100) + '%';
+    const canvas = document.getElementById('schemaCanvas');
+    canvas.style.transform = `scale(${currentZoom})`;
+    canvas.style.transformOrigin = '0 0';
+    setTimeout(renderRelationships, 50);
+}
+
+async function loadSchema() {
+    try {
+        const tablesResponse = await fetch('/api/schema/tables');
+        tables = await tablesResponse.json();
+        const relResponse = await fetch('/api/schema/relationships');
+        relationships = await relResponse.json();
+        renderTables();
+        setTimeout(renderRelationships, 100);
+        renderRelationshipsTable();
+        loadSqlDdl();
+    } catch (e) { console.error('ОШИБКА ЗАГРУЗКИ СХЕМЫ:', e); }
+}
+
+function renderTables() {
+    const container = document.getElementById('tablesContainer');
+    container.innerHTML = '';
+    tableElements = {};
+    const savedPositions = JSON.parse(localStorage.getItem('tablePositions') || '{}');
+    
+    tables.forEach(table => {
+        let pos = savedPositions[table.name] || DEFAULT_POSITIONS[table.name] || { x: 50 + Math.random() * 100, y: 50 + Math.random() * 100 };
+        
+        const tableDiv = document.createElement('div');
+        tableDiv.className = 'schema-table';
+        tableDiv.id = `table-${table.name}`;
+        tableDiv.setAttribute('data-table', table.name);
+        tableDiv.style.cssText = `
+            position: absolute; left: ${pos.x}px; top: ${pos.y}px;
+            background: var(--bg-secondary); border: 2px solid var(--accent-color);
+            border-radius: var(--radius-md); min-width: 280px;
+            box-shadow: var(--shadow-md); cursor: move; user-select: none; z-index: 10;
+            transition: box-shadow 0.2s;
+        `;
+        
+        const header = document.createElement('div');
+        header.style.cssText = `background: var(--accent-color); color: var(--bg-primary); padding: 0.75rem 1rem;
+            border-radius: var(--radius-sm) var(--radius-sm) 0 0; font-weight: 600; font-size: 0.8rem;
+            display: flex; justify-content: space-between; align-items: center; cursor: move;`;
+        header.innerHTML = `<span>${table.name}</span><span style="font-size: 0.7rem;">${table.columns.length} ПОЛЕЙ</span>`;
+        
+        const content = document.createElement('div');
+        content.style.cssText = `padding: 0.5rem 0; max-height: 300px; overflow-y: auto;`;
+        
+        let columnsHtml = '';
+        table.columns.forEach(col => {
+            const isPk = col.is_primary_key;
+            const isFk = col.is_foreign_key;
+            columnsHtml += `
+                <div style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: ${isPk ? 'var(--accent-color)' : (isFk ? 'var(--text-muted)' : 'transparent')};"></span>
+                    <span style="font-weight: ${isPk ? '600' : 'normal'}; color: var(--text-primary); font-size: 0.7rem;">${col.column_name}</span>
+                    <span style="font-size: 0.6rem; color: var(--text-muted); margin-left: auto;">${col.data_type}</span>
+                    ${isPk ? '<span style="font-size: 0.6rem; background: var(--accent-color); color: var(--bg-primary); padding: 0.1rem 0.3rem;">PK</span>' : ''}
+                    ${isFk ? '<span style="font-size: 0.6rem; background: var(--text-muted); color: var(--bg-primary); padding: 0.1rem 0.3rem;">FK</span>' : ''}
+                </div>
+            `;
+        });
+        content.innerHTML = columnsHtml;
+        
+        const hideBtn = document.createElement('div');
+        hideBtn.style.cssText = `padding: 0.5rem 1rem; text-align: center; border-top: 1px solid var(--border-light);
+            font-size: 0.6rem; color: var(--text-muted); cursor: pointer; text-transform: uppercase;`;
+        hideBtn.innerHTML = 'СКРЫТЬ';
+        hideBtn.onclick = (e) => { e.stopPropagation(); toggleTable(table.name); };
+        
+        tableDiv.appendChild(header);
+        tableDiv.appendChild(content);
+        tableDiv.appendChild(hideBtn);
+        makeDraggable(tableDiv, table.name);
+        container.appendChild(tableDiv);
+        tableElements[table.name] = tableDiv;
+    });
+}
+
+function makeDraggable(element, tableName) {
+    let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+    const header = element.querySelector('div:first-child');
+    header.onmousedown = dragMouseDown;
+    
+    function dragMouseDown(e) {
+        e.preventDefault();
+        startX = e.clientX; startY = e.clientY;
+        startLeft = parseInt(element.style.left) || 0;
+        startTop = parseInt(element.style.top) || 0;
+        isDragging = true;
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
+        element.style.boxShadow = 'var(--shadow-lg)';
+        element.style.zIndex = '100';
+    }
+    
+    function elementDrag(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        const dx = (e.clientX - startX) / currentZoom;
+        const dy = (e.clientY - startY) / currentZoom;
+        element.style.left = (startLeft + dx) + 'px';
+        element.style.top = (startTop + dy) + 'px';
+        renderRelationships();
+    }
+    
+    function closeDragElement() {
+        isDragging = false;
+        document.onmouseup = null;
+        document.onmousemove = null;
+        element.style.boxShadow = 'var(--shadow-md)';
+        element.style.zIndex = '10';
+        if (tableName) saveTablePosition(tableName, { x: parseInt(element.style.left), y: parseInt(element.style.top) });
+    }
+}
+
+function saveTablePosition(tableName, pos) {
+    let positions = JSON.parse(localStorage.getItem('tablePositions') || '{}');
+    positions[tableName] = pos;
+    localStorage.setItem('tablePositions', JSON.stringify(positions));
+}
+
+function toggleTable(tableName) {
+    const table = tableElements[tableName];
+    if (table) { table.style.display = table.style.display === 'none' ? 'block' : 'none'; renderRelationships(); }
+}
+
+function toggleAllTables() {
+    const anyHidden = Object.values(tableElements).some(t => t.style.display === 'none');
+    Object.values(tableElements).forEach(t => { t.style.display = anyHidden ? 'block' : 'none'; });
+    renderRelationships();
+}
+
+function renderRelationships() {
+    const svg = document.getElementById('relationshipsSvg');
+    svg.innerHTML = '';
+    const canvas = document.getElementById('schemaCanvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    
+    relationships.forEach(rel => {
+        const fromTable = tableElements[rel.from_table];
+        const toTable = tableElements[rel.to_table];
+        if (!fromTable || !toTable || fromTable.style.display === 'none' || toTable.style.display === 'none') return;
+        
+        const fromRect = fromTable.getBoundingClientRect();
+        const toRect = toTable.getBoundingClientRect();
+        
+        const fromX = (fromRect.left + fromRect.width/2 - canvasRect.left) / currentZoom;
+        const fromY = (fromRect.top + fromRect.height/2 - canvasRect.top) / currentZoom;
+        const toX = (toRect.left + toRect.width/2 - canvasRect.left) / currentZoom;
+        const toY = (toRect.top + toRect.height/2 - canvasRect.top) / currentZoom;
+        
+        const isCascade = rel.delete_rule === 'CASCADE';
+        
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', fromX); line.setAttribute('y1', fromY);
+        line.setAttribute('x2', toX); line.setAttribute('y2', toY);
+        line.setAttribute('stroke', 'var(--text-primary)');
+        line.setAttribute('stroke-width', '2');
+        if (isCascade) line.setAttribute('stroke-dasharray', '5,5');
+        
+        const angle = Math.atan2(toY - fromY, toX - fromX);
+        const arrowSize = 6;
+        const arrowX = toX - 15 * Math.cos(angle);
+        const arrowY = toY - 15 * Math.sin(angle);
+        
+        const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        const arrowPoints = [[arrowX, arrowY],
+            [arrowX - arrowSize * Math.cos(angle - 0.5), arrowY - arrowSize * Math.sin(angle - 0.5)],
+            [arrowX - arrowSize * Math.cos(angle + 0.5), arrowY - arrowSize * Math.sin(angle + 0.5)]];
+        arrow.setAttribute('points', arrowPoints.map(p => p.join(',')).join(' '));
+        arrow.setAttribute('fill', 'var(--text-primary)');
+        
+        svg.appendChild(line);
+        svg.appendChild(arrow);
+    });
+}
+
+function renderRelationshipsTable() {
+    const tbody = document.getElementById('relationshipsBody');
+    if (!relationships || relationships.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">НЕТ СВЯЗЕЙ МЕЖДУ ТАБЛИЦАМИ</td></tr>';
+        return;
+    }
+    let html = '';
+    relationships.forEach(rel => {
+        html += `<tr><td><strong>${rel.from_table}</strong></td><td>${rel.from_column}</td><td style="text-align: center;">→</td>
+            <td><strong>${rel.to_table}</strong></td><td>${rel.to_column}</td><td>ОДИН-КО-МНОГИМ</td>
+            <td>${rel.delete_rule === 'CASCADE' ? 'ДА' : 'НЕТ'}</td></tr>`;
+    });
+    tbody.innerHTML = html;
+}
+
+async function loadSqlDdl() {
+    try {
+        const response = await fetch('/api/schema/ddl');
+        const data = await response.json();
+        document.getElementById('sqlDdlContent').textContent = data.ddl;
+    } catch(e) { console.error(e); }
+}
+
+function showSqlDdl() { document.getElementById('sqlModal').style.display = 'flex'; }
+function closeSqlModal() { document.getElementById('sqlModal').style.display = 'none'; }
+function copySqlToClipboard() {
+    const sql = document.getElementById('sqlDdlContent').textContent;
+    navigator.clipboard.writeText(sql).then(() => alert('SQL СКОПИРОВАН В БУФЕР ОБМЕНА'));
+}
+
+function exportSchema() {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    script.onload = function() {
+        const canvas = document.getElementById('schemaCanvas');
+        html2canvas(canvas, { scale: 2, backgroundColor: '#0d0f1c', allowTaint: false }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'schema.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+    };
+    document.head.appendChild(script);
+}
+
+window.addEventListener('resize', () => renderRelationships());
+setInterval(renderRelationships, 50);
+</script>
+
+<style>
+.schema-table:hover { box-shadow: var(--shadow-lg) !important; }
+</style>
+{% endblock %}
