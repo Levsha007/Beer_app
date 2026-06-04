@@ -16,7 +16,7 @@ class Database:
     def __init__(self):
         self.connection_params = {
             'host': os.getenv('DB_HOST', 'postgres'),
-            'database': os.getenv('DB_NAME', 'clothing_warehouse'),
+            'database': os.getenv('DB_NAME', 'beer'),
             'user': os.getenv('DB_USER', 'postgres'),
             'password': os.getenv('DB_PASSWORD', 'postgres'),
             'port': os.getenv('DB_PORT', '5432')
@@ -74,7 +74,7 @@ class Database:
     def execute_sql_file(self, filepath):
         """Выполнить SQL файл через psql"""
         try:
-            db = os.getenv('DB_NAME', 'clothing_warehouse')
+            db = os.getenv('DB_NAME', 'beer')
             user = os.getenv('DB_USER', 'postgres')
             host = os.getenv('DB_HOST', 'postgres')
             port = os.getenv('DB_PORT', '5432')
@@ -297,7 +297,7 @@ class Database:
     # ---------- Backup / Restore ----------
     def create_backup(self):
         try:
-            db = os.getenv('DB_NAME', 'clothing_warehouse')
+            db = os.getenv('DB_NAME', 'beer')
             user = os.getenv('DB_USER', 'postgres')
             host = os.getenv('DB_HOST', 'postgres')
             port = os.getenv('DB_PORT', '5432')
@@ -321,7 +321,7 @@ class Database:
     def restore_backup(self, backup_file):
         """Восстановление из .backup файла"""
         try:
-            db = os.getenv('DB_NAME', 'clothing_warehouse')
+            db = os.getenv('DB_NAME', 'beer')
             user = os.getenv('DB_USER', 'postgres')
             host = os.getenv('DB_HOST', 'postgres')
             port = os.getenv('DB_PORT', '5432')
@@ -352,7 +352,7 @@ class Database:
     
     def create_table_backup(self, table, backup_dir):
         try:
-            db = os.getenv('DB_NAME', 'clothing_warehouse')
+            db = os.getenv('DB_NAME', 'beer')
             user = os.getenv('DB_USER', 'postgres')
             host = os.getenv('DB_HOST', 'postgres')
             port = os.getenv('DB_PORT', '5432')
