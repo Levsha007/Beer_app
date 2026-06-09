@@ -527,22 +527,21 @@ async def analyze_all_quality(delta_x: float = 1.0):
             total_defect += 1
         
         results.append({
-            'product_id': combo['product_id'],
-            'product_name': combo['product_name'],
-            'supplier_id': combo['supplier_id'],
-            'supplier_name': combo['supplier_name'],
-            'characteristics_count': combo['characteristics_count'],
-            'characteristics': char_results[:3],
-            'metrics': {
-                'Ch': n,
-                'Co': round(current_sum_log2, 3),
-                'Go': round(current_Go, 3),
-                'P': round(current_P, 4),
-                'is_quality': base_is_quality,
-                'base_P': round(base_P, 4)
-            }
-        })
-    
+    'product_id': combo['product_id'],
+    'product_name': combo['product_name'],
+    'supplier_id': combo['supplier_id'],
+    'supplier_name': combo['supplier_name'],
+    'characteristics_count': combo['characteristics_count'],
+    'characteristics': char_results[:3],
+    'metrics': {
+        'Ch': n,
+        'Co': round(current_sum_log2, 3),      # текущий Co (для отображения чувствительности)
+        'Go': round(current_Go, 3),            # текущий Go (для отображения чувствительности)
+        'P': round(base_P, 4),                 # ← ИСПРАВЛЕНО: базовый P (не зависит от Δx)
+        'is_quality': base_is_quality,         # базовый вердикт (согласован с P)
+        'base_P': round(base_P, 4)             # базовый P (дублируется для модального окна)
+    }
+})
     characteristic_stats = []
     for ch_id, stats in char_stats.items():
         avg_g = sum(stats['gradations']) / len(stats['gradations']) if stats['gradations'] else 0
