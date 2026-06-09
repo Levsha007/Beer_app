@@ -13,7 +13,7 @@ from pathlib import Path
 
 from database import Database
 
-app = FastAPI(title="Склад одежды - Информационная система", version="2.0.0")
+app = FastAPI(title="Склад пива - Информационная система", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -93,10 +93,8 @@ async def get_schema_tables():
     result = []
     
     for table in tables:
-        # Получаем колонки
         columns = db.get_table_columns(table) or []
         
-        # Получаем первичные ключи
         pk_query = """
             SELECT kcu.column_name
             FROM information_schema.table_constraints tc
@@ -108,7 +106,6 @@ async def get_schema_tables():
         pk_columns = db.execute_query(pk_query, (table,)) or []
         pk_set = {r['column_name'] for r in pk_columns}
         
-        # Получаем внешние ключи
         fk_query = """
             SELECT
                 kcu.column_name,
@@ -125,7 +122,6 @@ async def get_schema_tables():
         fk_columns = db.execute_query(fk_query, (table,)) or []
         fk_set = {r['column_name'] for r in fk_columns}
         
-        # Формируем список колонок с дополнительной информацией
         columns_info = []
         for col in columns:
             columns_info.append({
@@ -190,7 +186,6 @@ async def get_schema_ddl():
     ddl_parts = []
     
     for table in tables:
-        # Получаем колонки
         columns = db.execute_query(f"""
             SELECT 
                 column_name,
@@ -208,7 +203,6 @@ async def get_schema_ddl():
             default_str = f"DEFAULT {col['column_default']}" if col['column_default'] else ""
             col_defs.append(f"    {col['column_name']} {col['data_type']} {null_str} {default_str}".strip())
         
-        # Получаем первичный ключ
         pk = db.execute_query(f"""
             SELECT 
                 kcu.column_name
@@ -223,7 +217,6 @@ async def get_schema_ddl():
             pk_cols = [p['column_name'] for p in pk]
             col_defs.append(f"    PRIMARY KEY ({', '.join(pk_cols)})")
         
-        # Получаем внешние ключи
         fk = db.execute_query(f"""
             SELECT
                 kcu.column_name,
@@ -461,30 +454,10 @@ async def analyze_all_quality(delta_x: float = 1.0):
         if not chars:
             continue
         
-        # --- Базовый вердикт (Δx = 1.0) ---
-        base_sum_log2 = 0
-        n = len(chars)
-        
-        for ch in chars:
-            g = calculate_gradations(
-                ch['real_value'], 
-                ch['min_norm'], 
-                ch['max_norm'], 
-                1.0  # базовый Δx
-            )
-            base_sum_log2 += math.log2(g)
-        
-        base_Go = base_sum_log2 / n if n > 0 else 0
-        if base_Go > 0:
-            base_P = math.exp(-math.log(2) / (base_Go * base_Go))
-        else:
-            base_P = math.exp(-math.log(2) / 0.0001)
-        
-        base_is_quality = base_P <= 0.5
-        
-        # --- Текущий расчет с заданным Δx ---
+        # --- Текущий расчет с заданным Δx (для метрик и вердикта) ---
         char_results = []
         current_sum_log2 = 0
+        n = len(chars)
         
         for ch in chars:
             g = calculate_gradations(
@@ -521,27 +494,48 @@ async def analyze_all_quality(delta_x: float = 1.0):
         else:
             current_P = math.exp(-math.log(2) / 0.0001)
         
-        if base_is_quality:
+        # --- ВЕРДИКТ ПО ТЕКУЩЕМУ P (ПОРОГОВОЕ ПРАВИЛО) ---
+        # P ≤ 0.5 → КАЧЕСТВЕННЫЙ, P > 0.5 → БРАК
+        is_quality = current_P <= 0.5
+        
+        # --- Базовый P (при Δx=1.0) для справки ---
+        base_sum_log2 = 0
+        for ch in chars:
+            g = calculate_gradations(
+                ch['real_value'], 
+                ch['min_norm'], 
+                ch['max_norm'], 
+                1.0
+            )
+            base_sum_log2 += math.log2(g)
+        base_Go = base_sum_log2 / n if n > 0 else 0
+        if base_Go > 0:
+            base_P = math.exp(-math.log(2) / (base_Go * base_Go))
+        else:
+            base_P = math.exp(-math.log(2) / 0.0001)
+        
+        if is_quality:
             total_quality += 1
         else:
             total_defect += 1
         
         results.append({
-    'product_id': combo['product_id'],
-    'product_name': combo['product_name'],
-    'supplier_id': combo['supplier_id'],
-    'supplier_name': combo['supplier_name'],
-    'characteristics_count': combo['characteristics_count'],
-    'characteristics': char_results[:3],
-    'metrics': {
-        'Ch': n,
-        'Co': round(current_sum_log2, 3),      # текущий Co (для отображения чувствительности)
-        'Go': round(current_Go, 3),            # текущий Go (для отображения чувствительности)
-        'P': round(base_P, 4),                 # ← ИСПРАВЛЕНО: базовый P (не зависит от Δx)
-        'is_quality': base_is_quality,         # базовый вердикт (согласован с P)
-        'base_P': round(base_P, 4)             # базовый P (дублируется для модального окна)
-    }
-})
+            'product_id': combo['product_id'],
+            'product_name': combo['product_name'],
+            'supplier_id': combo['supplier_id'],
+            'supplier_name': combo['supplier_name'],
+            'characteristics_count': combo['characteristics_count'],
+            'characteristics': char_results[:3],
+            'metrics': {
+                'Ch': n,
+                'Co': round(current_sum_log2, 3),
+                'Go': round(current_Go, 3),
+                'P': round(current_P, 4),
+                'is_quality': is_quality,
+                'base_P': round(base_P, 4)
+            }
+        })
+    
     characteristic_stats = []
     for ch_id, stats in char_stats.items():
         avg_g = sum(stats['gradations']) / len(stats['gradations']) if stats['gradations'] else 0
@@ -603,17 +597,12 @@ async def get_product_detail(product_id: int, supplier_id: int, delta_x: float =
     
     char_results = []
     current_sum_log2 = 0
-    base_sum_log2 = 0
     n = len(chars)
     
     for ch in chars:
         x = ch['real_value']
         xmin = ch['min_norm']
         xmax = ch['max_norm']
-        
-        # Базовые градации (для определения качества)
-        base_g = calculate_gradations(x, xmin, xmax, 1.0)
-        base_sum_log2 += math.log2(base_g)
         
         # Текущие градации (для отображения)
         current_g = calculate_gradations(x, xmin, xmax, delta_x)
@@ -632,15 +621,6 @@ async def get_product_detail(product_id: int, supplier_id: int, delta_x: float =
             'in_norm': xmin <= x <= xmax
         })
     
-    # Базовый вердикт
-    base_Go = base_sum_log2 / n if n > 0 else 0
-    if base_Go > 0:
-        base_P = math.exp(-math.log(2) / (base_Go * base_Go))
-    else:
-        base_P = math.exp(-math.log(2) / 0.0001)
-    
-    is_quality = base_P <= 0.5
-    
     # Текущие метрики
     current_Go = current_sum_log2 / n if n > 0 else 0
     if current_Go > 0:
@@ -648,7 +628,20 @@ async def get_product_detail(product_id: int, supplier_id: int, delta_x: float =
     else:
         current_P = math.exp(-math.log(2) / 0.0001)
     
-    # Подсчет отклонений для пояснения
+    # --- ВЕРДИКТ ПО ТЕКУЩЕМУ P (ПОРОГОВОЕ ПРАВИЛО) ---
+    is_quality = current_P <= 0.5
+    
+    # --- Базовый P (при Δx=1.0) для справки ---
+    base_sum_log2 = 0
+    for ch in chars:
+        base_g = calculate_gradations(ch['real_value'], ch['min_norm'], ch['max_norm'], 1.0)
+        base_sum_log2 += math.log2(base_g)
+    base_Go = base_sum_log2 / n if n > 0 else 0
+    if base_Go > 0:
+        base_P = math.exp(-math.log(2) / (base_Go * base_Go))
+    else:
+        base_P = math.exp(-math.log(2) / 0.0001)
+    
     deviations = sum(1 for c in char_results if not c['in_norm'])
     
     return {
@@ -662,7 +655,7 @@ async def get_product_detail(product_id: int, supplier_id: int, delta_x: float =
             "P": round(current_P, 4),
             "base_P": round(base_P, 4),
             "is_quality": is_quality,
-            "verdict": "✓ КАЧЕСТВЕННЫЙ" if is_quality else "✗ БРАК"
+            "verdict": "КАЧЕСТВЕННЫЙ" if is_quality else "БРАК"
         },
         "summary": {
             "total_chars": n,
@@ -731,7 +724,6 @@ async def train_system_all():
             'percent': round(quality_percent, 1)
         }
     
-    # Находим Δx, при котором доля качественных ближе всего к 50%
     best_delta = min(deltas, key=lambda d: abs(results[d]['percent'] - 50))
     
     return {
@@ -787,7 +779,6 @@ async def export_spzr_analysis(delta_x: float = 1.0, format: str = "json"):
         output = BytesIO()
         
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Результаты
             results_data = []
             for r in analysis["results"]:
                 results_data.append({
@@ -804,7 +795,6 @@ async def export_spzr_analysis(delta_x: float = 1.0, format: str = "json"):
             if results_data:
                 pd.DataFrame(results_data).to_excel(writer, sheet_name="Результаты", index=False)
             
-            # Статистика по характеристикам
             chars_data = []
             for c in analysis.get("characteristic_stats", []):
                 chars_data.append({
@@ -816,7 +806,6 @@ async def export_spzr_analysis(delta_x: float = 1.0, format: str = "json"):
             if chars_data:
                 pd.DataFrame(chars_data).to_excel(writer, sheet_name="Характеристики", index=False)
             
-            # Сводка
             summary_data = {
                 "Параметр": [
                     "Дата анализа",
@@ -868,29 +857,21 @@ async def export_product_detail(
     filename = f"product_{product_id}_{supplier_id}_delta{delta_x}_{timestamp}"
     
     if format == "json":
-        # Подготовка данных для JSON с полной структурой как в интерфейсе
         is_quality = detail["metrics"]["is_quality"]
         
-        # Формируем пояснение как в модальном окне
         if is_quality:
             explanation = {
-                "title": "✅ Почему товар КАЧЕСТВЕННЫЙ, хотя есть отклонения?",
+                "title": "Почему товар КАЧЕСТВЕННЫЙ?",
                 "points": [
-                    f"Несмотря на {detail['summary']['deviations']} отклонений из {detail['summary']['total_chars']}, система считает товар качественным, потому что:",
-                    "Отклонения незначительны (малые градации n при базовом Δx=1.0)",
-                    f"Вероятность P = {detail['metrics']['base_P']:.4f} ≤ 0.5 (по методичке стр. 38)",
-                    f"Сигнал отклонения Co = {detail['metrics']['Co']} не превышает порог",
+                    f"Несмотря на {detail['summary']['deviations']} отклонений из {detail['summary']['total_chars']}, P = {detail['metrics']['P']:.4f} ≤ 0.5.",
                     "Пороговое правило: P ≤ 0.5 → качественный"
                 ]
             }
         else:
             explanation = {
-                "title": "❌ Почему товар БРАК, если большинство характеристик в норме?",
+                "title": "Почему товар БРАК?",
                 "points": [
-                    f"Хотя только {detail['summary']['deviations']} из {detail['summary']['total_chars']} характеристик имеют отклонения, система считает товар браком, потому что:",
-                    "Отклонения СИЛЬНЫЕ (большие градации n при базовом Δx=1.0)",
-                    f"Вероятность P = {detail['metrics']['base_P']:.4f} > 0.5 (по методичке стр. 38)",
-                    f"Сигнал отклонения Co = {detail['metrics']['Co']} превышает порог",
+                    f"Хотя только {detail['summary']['deviations']} из {detail['summary']['total_chars']} характеристик имеют отклонения, P = {detail['metrics']['P']:.4f} > 0.5.",
                     "Пороговое правило: P > 0.5 → брак"
                 ]
             }
@@ -908,47 +889,24 @@ async def export_product_detail(
             },
             "verdict": {
                 "text": detail["metrics"]["verdict"],
-                "is_quality": is_quality,
-                "color": "success" if is_quality else "danger"
+                "is_quality": is_quality
             },
             "explanation": explanation,
             "metrics": {
                 "Ch": detail["metrics"]["Ch"],
                 "Co": detail["metrics"]["Co"],
                 "Go": round(detail["metrics"]["Go"], 3),
-                "P_current": detail["metrics"]["P"],
-                "P_base": detail["metrics"]["base_P"],
-                "calculation": {
-                    "ch_formula": f"Ch = N = {detail['metrics']['Ch']}",
-                    "co_formula": f"Co = Σ log₂(nᵢ) = {detail['metrics']['Co']}",
-                    "go_formula": f"Go = Co / Ch = {detail['metrics']['Co']} / {detail['metrics']['Ch']} = {round(detail['metrics']['Go'], 3)}",
-                    "p_formula": f"P = e^(-ln2/Go²) = e^(-0.6931/{round(detail['metrics']['Go']**2, 3)}) = {detail['metrics']['P']:.4f}",
-                    "note": "Базовое P (при Δx=1.0): {:.4f} — именно это значение определяет вердикт".format(detail['metrics']['base_P'])
-                }
+                "P": detail["metrics"]["P"],
+                "base_P": detail["metrics"]["base_P"]
             },
             "summary": {
                 "total_chars": detail["summary"]["total_chars"],
                 "in_norm": detail["summary"]["in_norm"],
-                "deviations": detail["summary"]["deviations"],
-                "sum_log2": detail["metrics"]["Co"],
-                "avg_go": round(detail["metrics"]["Go"], 3)
+                "deviations": detail["summary"]["deviations"]
             },
-            "characteristics": [],
-            "analysis": {
-                "title": "📊 Анализ градаций:",
-                "points": [
-                    f"Сумма log₂(n) = {detail['metrics']['Co']}",
-                    f"Количество характеристик N = {detail['metrics']['Ch']}",
-                    f"Отношение Go = {round(detail['metrics']['Go'], 3)}",
-                    f"Вероятность P (текущая) = {detail['metrics']['P']:.4f}",
-                    f"Базовое P (при Δx=1.0) = {detail['metrics']['base_P']:.4f}",
-                    f"Правило: P {'≤ 0.5 → КАЧЕСТВЕННЫЙ' if is_quality else '> 0.5 → БРАК'}"
-                ],
-                "warning": "⚠️ Вердикт НЕ МЕНЯЕТСЯ при изменении Δx. Δx влияет только на отображение градаций."
-            }
+            "characteristics": []
         }
         
-        # Добавляем характеристики
         for c in detail["characteristics"]:
             export_data["characteristics"].append({
                 "name": c["name"],
@@ -958,11 +916,7 @@ async def export_product_detail(
                 "gradations": c["gradations"],
                 "log2": c["log2"],
                 "weight": c["weight"],
-                "status": {
-                    "text": "✓ в норме" if c["in_norm"] else "✗ отклонение",
-                    "in_norm": c["in_norm"],
-                    "color": "success" if c["in_norm"] else "danger"
-                }
+                "in_norm": c["in_norm"]
             })
         
         export_dir = Path("exports") / datetime.now().strftime("%Y%m%d")
@@ -985,7 +939,6 @@ async def export_product_detail(
         output = BytesIO()
         
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # ========== ЛИСТ 1: Информация о продукте ==========
             product_info = [
                 ["Параметр", "Значение"],
                 ["Продукт", detail["product"]["product_name"]],
@@ -1000,46 +953,16 @@ async def export_product_detail(
             ]
             pd.DataFrame(product_info).to_excel(writer, sheet_name="Информация", index=False, header=False)
             
-            # ========== ЛИСТ 2: Пояснение ==========
-            is_quality = detail["metrics"]["is_quality"]
-            if is_quality:
-                explanation_title = "✅ Почему товар КАЧЕСТВЕННЫЙ, хотя есть отклонения?"
-                explanation_points = [
-                    f"Несмотря на {detail['summary']['deviations']} отклонений из {detail['summary']['total_chars']}, система считает товар качественным, потому что:",
-                    "Отклонения незначительны (малые градации n при базовом Δx=1.0)",
-                    f"Вероятность P = {detail['metrics']['base_P']:.4f} ≤ 0.5 (по методичке стр. 38)",
-                    f"Сигнал отклонения Co = {detail['metrics']['Co']} не превышает порог",
-                    "Пороговое правило: P ≤ 0.5 → качественный"
-                ]
-            else:
-                explanation_title = "❌ Почему товар БРАК, если большинство характеристик в норме?"
-                explanation_points = [
-                    f"Хотя только {detail['summary']['deviations']} из {detail['summary']['total_chars']} характеристик имеют отклонения, система считает товар браком, потому что:",
-                    "Отклонения СИЛЬНЫЕ (большие градации n при базовом Δx=1.0)",
-                    f"Вероятность P = {detail['metrics']['base_P']:.4f} > 0.5 (по методичке стр. 38)",
-                    f"Сигнал отклонения Co = {detail['metrics']['Co']} превышает порог",
-                    "Пороговое правило: P > 0.5 → брак"
-                ]
-            
-            explanation_rows = [[explanation_title], [""]]
-            for point in explanation_points:
-                explanation_rows.append([point])
-            
-            pd.DataFrame(explanation_rows).to_excel(writer, sheet_name="Пояснение", index=False, header=False)
-            
-            # ========== ЛИСТ 3: Метрики и расчеты ==========
             metrics_data = [
                 ["Показатель", "Значение", "Формула"],
                 ["Ch (количество характеристик)", detail["metrics"]["Ch"], "Ch = N"],
                 ["Co (сумма log₂(n))", detail["metrics"]["Co"], "Co = Σ log₂(nᵢ)"],
-                ["Go (Co/Ch)", round(detail["metrics"]["Go"], 3), f"Go = {detail['metrics']['Co']} / {detail['metrics']['Ch']} = {round(detail['metrics']['Go'], 3)}"],
-                ["P (текущая вероятность)", f"{detail['metrics']['P']:.4f}", f"P = e^(-ln2/Go²) = e^(-0.6931/{round(detail['metrics']['Go']**2, 3)})"],
-                ["P (базовое, Δx=1.0)", f"{detail['metrics']['base_P']:.4f}", "Базовое значение для определения вердикта"],
-                ["Правило", "P ≤ 0.5 → КАЧЕСТВЕННЫЙ" if is_quality else "P > 0.5 → БРАК", "по методичке стр. 38"]
+                ["Go (Co/Ch)", round(detail["metrics"]["Go"], 3), f"Go = {detail['metrics']['Co']} / {detail['metrics']['Ch']}"],
+                ["P (вероятность)", f"{detail['metrics']['P']:.4f}", "P = e^(-ln2/Go²)"],
+                ["Правило", "P ≤ 0.5 → КАЧЕСТВЕННЫЙ" if detail["metrics"]["is_quality"] else "P > 0.5 → БРАК", "Пороговое правило"]
             ]
             pd.DataFrame(metrics_data).to_excel(writer, sheet_name="Метрики", index=False, header=True)
             
-            # ========== ЛИСТ 4: Характеристики ==========
             chars_data = []
             for c in detail["characteristics"]:
                 chars_data.append({
@@ -1051,46 +974,20 @@ async def export_product_detail(
                     "Градации (n)": c["gradations"],
                     "log₂(n)": c["log2"],
                     "Вес": c["weight"],
-                    "Статус": "✓ в норме" if c["in_norm"] else "✗ отклонение",
-                    "Отклонение": "Нет" if c["in_norm"] else f"{'выше' if c['real'] > c['max'] else 'ниже'} нормы"
+                    "Статус": "в норме" if c["in_norm"] else "отклонение"
                 })
             
             if chars_data:
                 pd.DataFrame(chars_data).to_excel(writer, sheet_name="Характеристики", index=False)
             
-            # ========== ЛИСТ 5: Анализ градаций ==========
-            analysis_data = [
-                ["Параметр", "Значение"],
-                ["Сумма log₂(n)", detail["metrics"]["Co"]],
-                ["Количество характеристик N", detail["metrics"]["Ch"]],
-                ["Отношение Go", round(detail["metrics"]["Go"], 3)],
-                ["Вероятность P (текущая)", f"{detail['metrics']['P']:.4f}"],
-                ["Вероятность P (базовая)", f"{detail['metrics']['base_P']:.4f}"],
-                ["Всего характеристик", detail["summary"]["total_chars"]],
-                ["В норме", detail["summary"]["in_norm"]],
-                ["Отклонений", detail["summary"]["deviations"]],
-                ["Процент отклонений", f"{round(detail['summary']['deviations'] / detail['summary']['total_chars'] * 100, 1)}%"],
-                [""],
-                ["Правило определения:"],
-                [f"P {'≤' if is_quality else '>'} 0.5 → {'КАЧЕСТВЕННЫЙ' if is_quality else 'БРАК'}"]
-            ]
-            pd.DataFrame(analysis_data).to_excel(writer, sheet_name="Анализ", index=False, header=False)
-            
-            # ========== ЛИСТ 6: Сводка ==========
             summary_data = [
                 ["Показатель", "Значение"],
                 ["Статус", detail["metrics"]["verdict"]],
                 ["Всего характеристик", detail["summary"]["total_chars"]],
                 ["В норме", detail["summary"]["in_norm"]],
                 ["С отклонениями", detail["summary"]["deviations"]],
-                ["Средний Go", round(detail["metrics"]["Go"], 3)],
                 ["Вероятность P", f"{detail['metrics']['P']:.4f}"],
-                ["Базовое P", f"{detail['metrics']['base_P']:.4f}"],
-                ["Δx текущий", delta_x],
-                [""],
-                ["⚠️ Важно:"],
-                ["Вердикт НЕ МЕНЯЕТСЯ при изменении Δx"],
-                ["Δx влияет только на отображение градаций"]
+                ["Δx текущий", delta_x]
             ]
             pd.DataFrame(summary_data).to_excel(writer, sheet_name="Сводка", index=False, header=False)
         

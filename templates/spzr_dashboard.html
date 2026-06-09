@@ -282,7 +282,7 @@ async function loadAnalysis() {
 function renderCharacteristicStats(stats) {
     const tbody = document.getElementById('characteristicStatsTable');
     if (!stats || stats.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">НЕТ ДАННЫХ</div></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">НЕТ ДАННЫХ</div></table>';
         return;
     }
     
@@ -351,7 +351,7 @@ function renderTable(results) {
     const tbody = document.getElementById('tableBody');
     tbody.innerHTML = '';
     if (!results || results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">НЕТ ДАННЫХ</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">НЕТ ДАННЫХ</div></table>';
         return;
     }
     
@@ -601,16 +601,18 @@ function displayModal(data) {
         </tr>`;
     });
     
+    const currentP = metrics.P;
+    
     const explanation = isQuality ? `
         <div style="background: rgba(106,154,74,0.15); padding: 1rem; margin-bottom: 1rem; border-left: 3px solid var(--success); border-radius: var(--radius-sm);">
             <strong style="color: var(--text-primary);">ПОЧЕМУ ТОВАР КАЧЕСТВЕННЫЙ?</strong><br>
-            <span style="color: var(--text-secondary);">НЕСМОТРЯ НА ${deviations} ОТКЛОНЕНИЙ ИЗ ${totalChars}, P = ${metrics.base_P.toFixed(4)} ≤ 0.5.<br>
-            ОТКЛОНЕНИЯ НЕЗНАЧИТЕЛЬНЫ, СИГНАЛ ОТКЛОНЕНИЯ CO = ${metrics.Co} НЕ ПРЕВЫШАЕТ ПОРОГ.</span>
+            <span style="color: var(--text-secondary);">НЕСМОТРЯ НА ${deviations} ОТКЛОНЕНИЙ ИЗ ${totalChars}, P = ${currentP.toFixed(4)} ≤ 0.5.<br>
+            ПОРОГОВОЕ ПРАВИЛО: P ≤ 0.5 → КАЧЕСТВЕННЫЙ</span>
         </div>` : `
         <div style="background: rgba(186,90,58,0.15); padding: 1rem; margin-bottom: 1rem; border-left: 3px solid var(--danger); border-radius: var(--radius-sm);">
             <strong style="color: var(--text-primary);">ПОЧЕМУ ТОВАР БРАК?</strong><br>
-            <span style="color: var(--text-secondary);">ХОТЯ ТОЛЬКО ${deviations} ИЗ ${totalChars} ХАРАКТЕРИСТИК ИМЕЮТ ОТКЛОНЕНИЯ, P = ${metrics.base_P.toFixed(4)} > 0.5.<br>
-            ОТКЛОНЕНИЯ СИЛЬНЫЕ, СИГНАЛ ОТКЛОНЕНИЯ CO = ${metrics.Co} ПРЕВЫШАЕТ ПОРОГ.</span>
+            <span style="color: var(--text-secondary);">ХОТЯ ТОЛЬКО ${deviations} ИЗ ${totalChars} ХАРАКТЕРИСТИК ИМЕЮТ ОТКЛОНЕНИЯ, P = ${currentP.toFixed(4)} > 0.5.<br>
+            ПОРОГОВОЕ ПРАВИЛО: P > 0.5 → БРАК</span>
         </div>`;
     
     document.getElementById('modalContent').innerHTML = `
@@ -627,8 +629,11 @@ function displayModal(data) {
             </table>
         </div>
         <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: var(--radius-sm); font-size: 0.7rem;">
-            <strong style="color: var(--text-primary);">РАСЧЁТ:</strong> <span style="color: var(--text-secondary);">CH = ${metrics.Ch}, CO = ${metrics.Co}, GO = ${metrics.Go.toFixed(3)}, P = ${metrics.P.toFixed(4)}</span><br>
-            <strong style="color: var(--text-primary);">БАЗОВОЕ P (Δx=1.0):</strong> <span style="color: var(--text-secondary);">${metrics.base_P.toFixed(4)} — ОПРЕДЕЛЯЕТ ВЕРДИКТ</span>
+            <strong style="color: var(--text-primary);">РАСЧЁТ (ПРИ ТЕКУЩЕМ Δx = ${currentDelta}):</strong><br>
+            <span style="color: var(--text-secondary);">CH = ${metrics.Ch}, CO = ${metrics.Co}, GO = ${metrics.Go.toFixed(3)}</span><br>
+            <strong style="color: var(--text-primary);">ВЕРОЯТНОСТЬ P = ${currentP.toFixed(4)}</strong><br>
+            <strong style="color: var(--text-primary);">ПОРОГОВОЕ ПРАВИЛО:</strong> <span style="color: var(--text-secondary);">P ≤ 0.5 → КАЧЕСТВЕННЫЙ, P > 0.5 → БРАК</span><br>
+            <strong style="color: var(--text-primary);">БАЗОВОЕ P (Δx=1.0):</strong> <span style="color: var(--text-secondary);">${metrics.base_P.toFixed(4)} (ДЛЯ СПРАВКИ)</span>
         </div>`;
     document.getElementById('detailModal').style.display = 'flex';
 }
